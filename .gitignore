@@ -47,7 +47,7 @@ models/
 # Results
 results/
 
-/archieve
+archieve/
 
 ImageUploader.tsx
 ImageUploader_last.tsx
