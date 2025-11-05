@@ -2,6 +2,7 @@
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor # <-- Возвращаемся к ImagePredictor
 import numpy as np
@@ -120,164 +121,198 @@ def get_unique_filename(base_name: str, ext: str) -> str:
 # API: initialize session (upload image -> preprocess -> set_image)
 # -------------------------
 @app.post("/init")
-async def init_session(file: UploadFile = File(...)):
+async def init_session(
+    file: UploadFile = File(...),
+    config: str | None = Form(None),
+):
     """
     Initialize a segmentation session with uploaded image.
-    Returns session_id and processed preview (base64 PNG).
+    Applies default preprocessing if no config provided.
     """
-    print(f"[DEBUG] /init called for file: {file.filename}") # <-- Отладка
+    print(f"[DEBUG] /init called for file: {file.filename}")
     try:
         raw = await file.read()
-        print("[DEBUG] File read successfully") # <-- Отладка
         pil = Image.open(BytesIO(raw)).convert("RGB")
         image_np = np.array(pil)  # RGB
 
-        # preprocess
-        processed = preprocess_image_cv(image_np)
-        print("[DEBUG] Image preprocessed") # <-- Отладка
+        # === 1. Определяем конфиг ===
+        default_cfg = {
+            "median_ksize": 5,
+            "contrast_factor": 1.5,
+            "sharpness_factor": 2.0,
+            "clahe_clip_limit": 1.5,
+            "clahe_tile_grid": (8, 8),
+        }
 
-        # set model image
-        # --- ПРАВКА: set_image теперь внутри контекстного менеджера ---
+        # если фронт прислал кастомный — парсим
+        if config:
+            try:
+                cfg = json.loads(config)
+                print(f"[DEBUG] Custom preprocessing config received: {cfg}")
+            except Exception as e:
+                print(f"[WARN] Failed to parse config JSON: {e}")
+                cfg = default_cfg.copy()
+        else:
+            cfg = default_cfg.copy()
+
+        # === 2. Применяем препроцесс ===
+        processed = preprocess_image_cv(image_np, cfg)
+        print("[DEBUG] Image preprocessed")
+
+        # === 3. Подготавливаем SAM ===
         with torch.inference_mode(), torch.autocast(autocast_device, dtype=autocast_dtype):
             predictor.set_image(processed)
-        print("[DEBUG] predictor.set_image completed successfully") # <-- Отладка
 
-        # create session
+        # === 4. Создаём сессию ===
         session_id = str(uuid.uuid4())
         sessions[session_id] = {
             "image": processed,
-            "logits": None, # <-- Сохраняем logits
+            "logits": None,
             "orig_name": Path(file.filename).stem if file.filename else f"image_{int(time.time())}",
-            "points": [], # <-- Инициализируем points
-            "is_first_click": True # <-- Флаг для определения первого клика
+            "points": [],
+            "is_first_click": True,
+            "config": cfg,  # <--- сохраняем текущие настройки
         }
-        print(f"[DEBUG] Session {session_id} created") # <-- Отладка
 
+        # === 5. Возвращаем предпросмотр и реальные параметры ===
         preview_b64 = image_to_base64_png(processed)
-        print("[DEBUG] /init returning successfully") # <-- Отладка
-        return {"session_id": session_id, "preview_b64": preview_b64}
+        return {
+            "session_id": session_id,
+            "preview_b64": preview_b64,
+            "used_config": cfg,  # <--- фронт покажет эти значения на слайдерах
+        }
+
     except Exception as e:
-        print(f"[ERROR] Exception in /init: {e}") # <-- Отладка
-        traceback.print_exc() # <-- Отладка: печатаем трассировку
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error during initialization: {str(e)}")
 
 
+@app.post("/update_settings")
+async def update_settings(
+    session_id: str = Form(...),
+    median_ksize: int = Form(5),
+    contrast_factor: float = Form(1.5),
+    sharpness_factor: float = Form(2.0),
+    clahe_clip_limit: float = Form(1.5),
+    clahe_tile_grid: str = Form("8,8"),
+):
+    if session_id not in sessions:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    sess = sessions[session_id]
+    image_np = sess["image"]
+
+    grid_tuple = tuple(map(int, clahe_tile_grid.split(",")))
+
+    config = {
+        "median_ksize": median_ksize,
+        "contrast_factor": contrast_factor,
+        "sharpness_factor": sharpness_factor,
+        "clahe_clip_limit": clahe_clip_limit,
+        "clahe_tile_grid": grid_tuple,
+    }
+
+    processed = preprocess_image_cv(image_np, config)
+    with torch.inference_mode(), torch.autocast(autocast_device, dtype=autocast_dtype):
+        predictor.set_image(processed)
+
+    sess["image"] = processed
+    preview_b64 = image_to_base64_png(processed)
+    return {"preview_b64": preview_b64}
+
+
 # -------------------------
-# API: iterative segmentation (фикс - с использованием logits и контекстного менеджера)
+# API: iterative segmentation (фикс - сохраняем 3 файла, без заливки)
 # -------------------------
 @app.post("/segment")
 async def segment_session(
     session_id: str = Form(...),
     x: int | None = Form(None),
     y: int | None = Form(None),
-    label: int | None = Form(1), # label по умолчанию 1 (объект)
+    label: int | None = Form(1),
     save: bool | None = Form(False),
 ):
-    print(f"[DEBUG] /segment called for session: {session_id}") # <-- Отладка
     if session_id not in sessions:
-        print(f"[ERROR] Session {session_id} not found") # <-- Отладка
         raise HTTPException(status_code=400, detail="Invalid session_id")
 
     sess = sessions[session_id]
     image_np = sess["image"]
 
-    # добавляем новую точку в память
     if x is not None and y is not None:
         sess["points"].append([int(x), int(y), int(label)])
 
     if not sess["points"]:
-        print("[ERROR] No points provided in /segment") # <-- Отладка
         raise HTTPException(status_code=400, detail="No points provided")
+    
+    #print(f"[DEBUG] session parametrs: {sess}")
 
-    # --- Подготовка точек для SAM 2 ---
     all_coords = [[p[0], p[1]] for p in sess["points"]]
     all_labels = [p[2] for p in sess["points"]]
     input_point = [all_coords]
     input_label = [all_labels]
-
-    # --- Определяем параметры для predict ---
     is_first_click = sess.get("is_first_click", True)
     mask_input = sess.get("logits", None)
+    multimask_output = is_first_click
 
-    multimask_output = is_first_click # Первый клик - multimask, далее - нет
+    with torch.inference_mode(), torch.autocast(autocast_device, dtype=autocast_dtype):
+        predict_kwargs = {
+            "point_coords": input_point,
+            "point_labels": input_label,
+            "multimask_output": multimask_output,
+        }
+        if mask_input is not None:
+            predict_kwargs["mask_input"] = mask_input[None, :, :]
 
-    try:
-        print(f"[DEBUG] Points: {all_coords}, Labels: {all_labels}, is_first_click: {is_first_click}, multimask_output: {multimask_output}") # <-- Отладка
-        print(f"[DEBUG] mask_input is None: {mask_input is None}") # <-- Отладка
+        masks, scores, logits = predictor.predict(**predict_kwargs)
 
-        # --- Вызов predict внутри контекстного менеджера ---
-        with torch.inference_mode(), torch.autocast(autocast_device, dtype=autocast_dtype):
-            # Подготовим аргументы
-            predict_kwargs = {
-                "point_coords": input_point,
-                "point_labels": input_label,
-                "multimask_output": multimask_output,
-            }
-            if mask_input is not None:
-                 # Убедимся, что mask_input имеет правильную форму [C, H, W], не [1, C, H, W]
-                 # logits от SAM 2 имеют форму [C, H, W], нужно добавить размерность батча
-                predict_kwargs["mask_input"] = mask_input[None, :, :]
+    if multimask_output:
+        best_idx = int(np.argmax(scores))
+        mask = masks[best_idx]
+        sess["logits"] = logits[best_idx]
+        sess["is_first_click"] = False
+    else:
+        mask = masks[0]
+        sess["logits"] = logits[0]
 
-            masks, scores, logits = predictor.predict(**predict_kwargs)
-        print("[DEBUG] predictor.predict completed successfully") # <-- Отладка
+    mask_bin = (mask > 0.0).astype(np.uint8)
+    sess["last_mask"] = mask_bin
 
-        # --- Обработка результата ---
-        if multimask_output:
-            # Выбираем лучшую маску из 3
-            best_idx = int(np.argmax(scores))
-            mask = masks[best_idx]
-            # Сохраняем соответствующие logits для уточнения
-            sess["logits"] = logits[best_idx]
-            # Сбрасываем флаг первого клика
-            sess["is_first_click"] = False
-        else:
-            # multimask_output=False, возвращается одна маска
-            mask = masks[0]
-            # Сохраняем соответствующие logits для дальнейшего уточнения
-            sess["logits"] = logits[0]
-            # Флаг остаётся False, так как это уже не первый клик
+    # Контур без заливки
+    mask_for_contours = (mask_bin * 255).astype(np.uint8)
+    contours_cv2, _ = cv2.findContours(mask_for_contours, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = [[[int(pt[0][0]), int(pt[0][1])] for pt in c] for c in contours_cv2 if len(c) > 2]
 
-        # mask_bin уже бинарная маска от SAM 2, но убедимся, что она uint8
-        mask_bin = (mask > 0.0).astype(np.uint8)
-        sess["last_mask"] = mask_bin
+    # Рисуем только контур
+    overlay = image_np.copy()
+    for c in contours:
+        pts_arr = np.array(c, dtype=np.int32)
+        cv2.polylines(overlay, [pts_arr], isClosed=True, color=(255, 0, 0), thickness=2)
 
-        # контур через cv2 (как в примере show_mask)
-        # Работаем с булевой/float маской напрямую
-        # cv2.findContours требует uint8, внутренне он использует порог
-        # для определения границы (обычно 127 для uint8, что соответствует 0.5 для нормализованной [0,1])
-        # маска для cv2 должна быть 0 или 255, но SAM возвращает bool/float [0, 1]
-        # преобразуем маску к uint8 [0, 255]
-        mask_for_contours = (mask_bin * 255).astype(np.uint8)
-        contours_cv2, _ = cv2.findContours(mask_for_contours, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # Фильтруем короткие контуры
-        contours = [[[int(pt[0][0]), int(pt[0][1])] for pt in c] for c in contours_cv2 if len(c) > 2]
+    overlay_b64 = image_to_base64_png(overlay)
 
-        # полупрозрачный оверлей
-        overlay = image_np.copy()
-        red = np.zeros_like(image_np)
-        red[mask_bin > 0] = (255, 0, 0)
-        overlay = cv2.addWeighted(overlay, 1.0, red, 0.25, 0)
-        for c in contours:
-            pts_arr = np.array(c, dtype=np.int32)
-            cv2.polylines(overlay, [pts_arr], isClosed=True, color=(255, 0, 0), thickness=2)
+    saved = {}
+    if save:
+        base_name = sess.get("orig_name", f"image_{int(time.time())}")
+        #jpg_path = get_unique_filename(base_name, ".jpg")
+        jpg_path = RESULTS_DIR / f"{base_name}.jpg"
+        #segmented_path = jpg_path.replace(".jpg", "_segmented.jpg")
+        segmented_path = RESULTS_DIR / f"{base_name}_segmented.jpg"
+        #npy_path = jpg_path.replace(".jpg", ".npy")
+        npy_path = RESULTS_DIR / f"{base_name}.npy"
+        logits_path = RESULTS_DIR / f"{base_name}_logits.npy"
 
-        overlay_b64 = image_to_base64_png(overlay)
+        # сохраняем предобработанную
+        cv2.imwrite(str(jpg_path), cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+        # сохраняем с контуром
+        cv2.imwrite(str(segmented_path), cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
+        # сохраняем маску
+        np.save(str(npy_path), mask_bin)
 
-        saved = {}
-        if save:
-            base_name = sess.get("orig_name", f"image_{int(time.time())}")
-            jpg_path = get_unique_filename(f"{base_name}_segmented", ".jpg")
-            npy_path = jpg_path.replace(".jpg", ".npy")
-            cv2.imwrite(jpg_path, cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
-            np.save(npy_path, mask_bin)
-            saved = {"jpg": jpg_path, "npy": npy_path}
+        np.save(str(logits_path), sess["logits"])
+        saved = {"base": jpg_path, "segmented": segmented_path, "mask": npy_path, "logits": logits_path}        
 
-        print("[DEBUG] /segment returning successfully") # <-- Отладка
-        return {"session_id": session_id, "contours": contours, "overlay_b64": overlay_b64, "saved": saved}
-    except Exception as e:
-        print(f"[ERROR] Exception in /segment: {e}") # <-- Отладка
-        traceback.print_exc() # <-- Отладка: печатаем трассировку
-        raise HTTPException(status_code=500, detail=f"Error during segmentation: {str(e)}")
+    return {"session_id": session_id, "contours": contours, "overlay_b64": overlay_b64, "saved": saved}
+
 
 
 # -------------------------
@@ -303,7 +338,12 @@ async def reset_session(session_id: str = Form(...)):
 # -------------------------
 @app.get("/results/list")
 def list_results(page: int = Query(1, ge=1), per_page: int = Query(12, ge=1, le=50)):
-    all_files = sorted(RESULTS_DIR.glob("*.jpg"), key=os.path.getmtime, reverse=True)
+    """Показываем только сегментированные снежинки (_segmented.jpg), без ошибок если пусто"""
+    all_files = sorted(
+        RESULTS_DIR.glob("*_segmented.jpg"),
+        key=os.path.getmtime,
+        reverse=True
+    )
     total = len(all_files)
     start = (page - 1) * per_page
     end = start + per_page
@@ -311,8 +351,18 @@ def list_results(page: int = Query(1, ge=1), per_page: int = Query(12, ge=1, le=
     files = []
     for f in selected:
         stat = f.stat()
-        files.append({"name": f.name, "size_kb": round(stat.st_size / 1024, 1), "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))})
-    return {"page": page, "per_page": per_page, "total": total, "results": files}
+        files.append({
+            "name": f.name,
+            "size_kb": round(stat.st_size / 1024, 1),
+            "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))
+        })
+    return {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "results": files
+    }
+
 
 
 @app.get("/results/image")
@@ -321,3 +371,83 @@ def get_result_image(name: str):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     return FileResponse(path)
+
+
+@app.get("/load_result")
+def load_result(name: str):
+    """
+    Загружаем ранее сохранённую снежинку (_segmented.jpg).
+    Возвращаем preview с НАРИСОВАННЫМ красным контуром, контурные точки и новую session_id.
+    """
+    print(f"[DEBUG] /load_result called for: {name}")
+
+    # вычистим базовое имя (поддерживаем как "foo_segmented.jpg", так и "foo.jpg")
+    base_name = Path(name).stem.replace("_segmented", "")
+    jpg_path = RESULTS_DIR / f"{base_name}.jpg"
+    npy_path = RESULTS_DIR / f"{base_name}.npy"
+    logits_path = RESULTS_DIR / f"{base_name}_logits.npy"
+
+    if not jpg_path.exists() or not npy_path.exists():
+        print("[WARN] Missing files for load_result:", jpg_path, npy_path)
+        return {
+            "error": "Missing files",
+            "session_id": None,
+            "preview_b64": None,
+            "contours": [],
+        }
+
+    # загружаем предобработанное изображение (чистое, без контуров)
+    image = Image.open(jpg_path).convert("RGB")
+    image_np = np.array(image)
+
+    # загружаем маску из .npy (логика: mask saved as binary 0/1)
+    mask = np.load(npy_path, allow_pickle=True)
+    mask_bin = (mask > 0).astype(np.uint8)
+    mask_uint8 = (mask_bin * 255).astype(np.uint8)
+
+    # находим контуры (cv2 ожидает uint8)
+    contours_cv2, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = [
+        [[int(pt[0][0]), int(pt[0][1])] for pt in c] for c in contours_cv2 if len(c) > 2
+    ]
+
+    # нарисуем **красный** контур поверх исходного изображения (без заливки)
+    overlay = image_np.copy()
+    for c in contours:
+        if len(c) < 2:
+            continue
+        pts_arr = np.array(c, dtype=np.int32)
+        # цвет (255,0,0) — красный; толщина 2
+        cv2.polylines(overlay, [pts_arr], isClosed=True, color=(255, 0, 0), thickness=2)
+
+    preview_b64 = image_to_base64_png(overlay)
+
+    # создаём новую сессию и ставим изображение в predictor (без переконфигурации)
+    session_id = str(uuid.uuid4())
+    with torch.inference_mode(), torch.autocast(autocast_device, dtype=autocast_dtype):
+        predictor.set_image(image_np)
+
+    # если логиты есть — восстанавливаем полностью
+    if logits_path.exists():
+        logits = np.load(logits_path, allow_pickle=True)
+        is_first_click = False
+    else:
+        logits = None
+        is_first_click = True
+
+    sessions[session_id] = {
+        "image": image_np,
+        "logits": logits,
+        "orig_name": base_name,
+        "points": [],
+        "is_first_click": is_first_click,
+    }    
+
+    print(f"[DEBUG] /load_result ready: {session_id}, contours: {len(contours)}")
+    return {
+        "session_id": session_id,
+        "preview_b64": preview_b64,
+        "contours": contours,
+    }
+
+
