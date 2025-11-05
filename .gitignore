@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+*.dist-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+venv.bak/
+env.bak/
+
+# Conda
+.conda/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models (если не хочешь заливать чекпоинты, что разумно)
+models/
+# Или, если хочешь заливать, укажи конкретные файлы, которые НЕ нужно игнорировать, иначе все .pt/.pth
+!models/sam2.1_hiera_large.pt # <-- Пример: заливать этот файл, если он маленький
+
+# Results
+results/
