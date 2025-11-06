@@ -49,9 +49,9 @@ results/
 
 archieve/
 
-ImageUploader.tsx
-ImageUploader_last.tsx
-main_test.py
-main_old.py
-main_last.py
-main_last_new.py
+frontend/src/components/ImageUploader.tsx
+frontend/src/components/ImageUploader_last.tsx
+backend/main_test.py
+backend/main_old.py
+backend/main_last.py
+backend/main_last_new.py
