@@ -90,6 +90,13 @@ export type AppContextType = {
   isUpdatingSettings: boolean;
   setIsUpdatingSettings: (v: boolean) => void;
 
+  // --- НОВОЕ: Поля для ResultsModal ---
+  isResultsModalOpen: boolean;
+  setIsResultsModalOpen: (isOpen: boolean) => void;
+  initialFolderNameForModal: string | null;
+  setInitialFolderNameForModal: (folderName: string | null) => void;
+  // --- /НОВОЕ ---
+
 };
   
 
@@ -151,6 +158,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [refinementCompleted, setRefinementCompleted] = useState<boolean>(false);
 
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
+
+  // --- НОВОЕ: Состояния для ResultsModal ---
+  const [isResultsModalOpen, setIsResultsModalOpen] = useState<boolean>(false);
+  const [initialFolderNameForModal, setInitialFolderNameForModal] = useState<string | null>(null);
+  // --- /НОВОЕ ---
 
   return (
     <AppContext.Provider
@@ -217,7 +229,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refinementCompleted,
         setRefinementCompleted,
         isUpdatingSettings,
-        setIsUpdatingSettings
+        setIsUpdatingSettings,
+        // --- НОВОЕ: Передача состояний ResultsModal ---
+        isResultsModalOpen,
+        setIsResultsModalOpen,
+        initialFolderNameForModal,
+        setInitialFolderNameForModal,
+        // --- /НОВОЕ ---
       }}
     >
       {children}

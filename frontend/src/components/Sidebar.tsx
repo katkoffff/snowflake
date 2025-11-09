@@ -57,6 +57,7 @@ export default function Sidebar() {
       setSessionId(res.data.session_id);
       setPreview(`data:image/png;base64,${res.data.preview_b64}`);
       setOverlay(null);
+      setPoints([]); // <-- очищаем точки тоже
       if (mode === 'interactive') {    
         if (interactiveSubMode === 'main') {
           setContours([]);

@@ -861,37 +861,56 @@ async def save_all(session_id: str = Form(...)):
 
     img = sess["image"].copy()
 
+    all_contours_with_info = [] # <-- НОВОЕ: Список для хранения всех контуров и их типа
+
     # draw main
-    """
-    if "main_mask" in sess:
-        cnt_img = (sess["main_mask"] * 255).astype(np.uint8)
-        cnts, _ = cv2.findContours(cnt_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for c in cnts:
-            pts = np.array([[int(p[0][0]), int(p[0][1])] for p in c], dtype=np.int32)
-            cv2.polylines(img, [pts], True, (255,0,0), 2)
-    """        
-    if (dir_path / "main_mask.npy").exists():
-        main_mask = np.load(str(dir_path / "main_mask.npy"))
+    main_mask_path = dir_path / "main_mask.npy" # <-- Явно указываем путь
+    if main_mask_path.exists():
+        main_mask = np.load(str(main_mask_path))
         cnt_img = (main_mask * 255).astype(np.uint8)
         cnts, _ = cv2.findContours(cnt_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for c in cnts:
             pts = np.array([[int(p[0][0]), int(p[0][1])] for p in c], dtype=np.int32)
-            cv2.polylines(img, [pts], True, (255, 0, 0), 2) # Красный для main        
+            cv2.polylines(img, [pts], True, (255, 0, 0), 2) # Красный для main
+            # --- НОВОЕ: Сохраняем контур ---
+            all_contours_with_info.append({
+                "type": "main",
+                "contour": pts.tolist() # .tolist() для сериализации в JSON-compatible формат, если будем использовать json.dump потом
+            })
+            # --- /НОВОЕ ---
 
     # draw inner slaves
     slave_files = sorted([f for f in os.listdir(dir_path) if f.endswith("_mask.npy") and f.startswith("slave_")])
     for sf in slave_files:
-        mask = np.load(str(dir_path / sf))
+        mask_path = dir_path / sf # <-- Явно указываем путь к файлу маски
+        mask = np.load(str(mask_path))
         cnt_img = (mask * 255).astype(np.uint8)
-        cnts,_ = cv2.findContours(cnt_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cnts, _ = cv2.findContours(cnt_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for c in cnts:
             pts = np.array([[int(pt[0][0]), int(pt[0][1])] for pt in c], dtype=np.int32)
-            cv2.polylines(img, [pts], True, (255,0,0), 2)
+            cv2.polylines(img, [pts], True, (255, 0, 0), 2) # Жёлтый для slave
+            # --- НОВОЕ: Сохраняем контур ---
+            # Извлекаем номер слейва из имени файла
+            # sf = "slave_1_mask.npy" -> prefix = "slave_1"
+            prefix = sf.replace("_mask.npy", "")
+            all_contours_with_info.append({
+                "type": prefix, # e.g., "slave_1", "slave_2", ...
+                "contour": pts.tolist()
+            })
+            # --- /НОВОЕ ---
 
-    out = dir_path / "final.jpg"
-    cv2.imwrite(str(out), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    out_jpg = dir_path / "final.jpg"
+    cv2.imwrite(str(out_jpg), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
-    return {"final": str(out)}
+    # --- НОВОЕ: Сохраняем все контуры в один .npy файл ---
+    out_contours_npy = dir_path / "all_contours.npy"
+    # all_contours_with_info - это список словарей, где каждый словарь содержит "type" и "contour"
+    # np.save сохраняет Python-объекты, если они совместимы (списки, словари, числа, numpy массивы)
+    # contours (pts) уже конвертированы в list через .tolist()
+    np.save(str(out_contours_npy), all_contours_with_info)
+    # --- /НОВОЕ ---
+
+    return {"final": str(out_jpg)} # <-- Возвращаем путь к новому файлу
 
 # -------------------------
 # Reset API (новый, для кнопки Reset)
@@ -956,121 +975,89 @@ async def clear_session_dir(session_id: str = Form(...)):
         print(f"[ERROR] Failed to clear directory {dir_path}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clear directory: {str(e)}")
     
-# -------------------------
-# Results listing + image serving (paginated)
-# -------------------------
+# --- ИЗМЕНЁННЫЙ эндпоинт /results/list ---
 @app.get("/results/list")
-def list_results(page: int = Query(1, ge=1), per_page: int = Query(12, ge=1, le=50)):
-    """Показываем только сегментированные снежинки (_segmented.jpg), без ошибок если пусто"""
-    all_files = sorted(
-        RESULTS_DIR.glob("*_segmented.jpg"),
-        key=os.path.getmtime,
-        reverse=True
-    )
-    total = len(all_files)
+def list_results_dirs(page: int = Query(1, ge=1), per_page: int = Query(12, ge=1, le=200)):
+    """
+    Показывает список папок сессий.
+    """
+    all_dirs = sorted([d for d in RESULTS_DIR.iterdir() if d.is_dir()], key=os.path.getmtime, reverse=True)
+    total = len(all_dirs)
     start = (page - 1) * per_page
     end = start + per_page
-    selected = all_files[start:end]
-    files = []
-    for f in selected:
-        stat = f.stat()
-        files.append({
-            "name": f.name,
-            "size_kb": round(stat.st_size / 1024, 1),
-            "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))
+    selected_dirs = all_dirs[start:end]
+
+    dirs_info = []
+    for d in selected_dirs:
+        # Ищем файл final.jpg в папке
+        final_img_path = d / "final.jpg"
+        preview_img = None
+        if final_img_path.exists():
+            preview_img = final_img_path.name # Имя файла, которое можно использовать как "превью"
+        # Можешь включить и другие файлы, если хочешь, но preview_img покажет, есть ли финальный результат
+        dirs_info.append({
+            "name": d.name, # Имя папки
+            "preview_image": preview_img, # Имя финального изображения (если есть)
+            "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(d.stat().st_mtime)),
+            "path": str(d.relative_to(RESULTS_DIR)) # Относительный путь к папке, если понадобится
         })
+
     return {
         "page": page,
         "per_page": per_page,
         "total": total,
-        "results": files
+        "results": dirs_info # <-- Теперь список папок, а не файлов
     }
 
-
-
-@app.get("/results/image")
-def get_result_image(name: str):
-    path = RESULTS_DIR / name
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Image not found")
-    return FileResponse(path)
-
-
-@app.get("/load_result")
-def load_result(name: str):
+# --- НОВЫЙ эндпоинт: список изображений в папке ---
+@app.get("/results/list_images_in_dir")
+def list_images_in_dir(
+    dir_name: str = Query(...), # Имя папки сессии
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200) # Много изображений может быть
+):
     """
-    Загружаем ранее сохранённую снежинку (_segmented.jpg).
-    Возвращаем preview с НАРИСОВАННЫМ красным контуром, контурные точки и новую session_id.
+    Возвращает список изображений (.jpg) из указанной папки сессии.
     """
-    print(f"[DEBUG] /load_result called for: {name}")
+    dir_path = RESULTS_DIR / dir_name
+    if not dir_path.exists() or not dir_path.is_dir():
+        raise HTTPException(status_code=404, detail="Directory not found")
 
-    # вычистим базовое имя (поддерживаем как "foo_segmented.jpg", так и "foo.jpg")
-    base_name = Path(name).stem.replace("_segmented", "")
-    jpg_path = RESULTS_DIR / f"{base_name}.jpg"
-    npy_path = RESULTS_DIR / f"{base_name}.npy"
-    logits_path = RESULTS_DIR / f"{base_name}_logits.npy"
+    all_files = sorted([f for f in dir_path.iterdir() if f.is_file() and f.suffix.lower() == ".jpg"],
+                       key=os.path.getmtime, reverse=True) # Сортируем по времени, можно по имени
+    total = len(all_files)
+    start = (page - 1) * per_page
+    end = start + per_page
+    selected_files = all_files[start:end]
 
-    if not jpg_path.exists() or not npy_path.exists():
-        print("[WARN] Missing files for load_result:", jpg_path, npy_path)
-        return {
-            "error": "Missing files",
-            "session_id": None,
-            "preview_b64": None,
-            "contours": [],
-        }
+    files_info = []
+    for f in selected_files:
+        files_info.append({
+            "name": f.name,
+            "size_kb": round(f.stat().st_size / 1024, 1),
+            "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(f.stat().st_mtime)),
+        })
 
-    # загружаем предобработанное изображение (чистое, без контуров)
-    image = Image.open(jpg_path).convert("RGB")
-    image_np = np.array(image)
-
-    # загружаем маску из .npy (логика: mask saved as binary 0/1)
-    mask = np.load(npy_path, allow_pickle=True)
-    mask_bin = (mask > 0).astype(np.uint8)
-    mask_uint8 = (mask_bin * 255).astype(np.uint8)
-
-    # находим контуры (cv2 ожидает uint8)
-    contours_cv2, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = [
-        [[int(pt[0][0]), int(pt[0][1])] for pt in c] for c in contours_cv2 if len(c) > 2
-    ]
-
-    # нарисуем **красный** контур поверх исходного изображения (без заливки)
-    overlay = image_np.copy()
-    for c in contours:
-        if len(c) < 2:
-            continue
-        pts_arr = np.array(c, dtype=np.int32)
-        # цвет (255,0,0) — красный; толщина 2
-        cv2.polylines(overlay, [pts_arr], isClosed=True, color=(255, 0, 0), thickness=2)
-
-    preview_b64 = image_to_base64_png(overlay)
-
-    # создаём новую сессию и ставим изображение в predictor (без переконфигурации)
-    session_id = str(uuid.uuid4())
-    with torch.inference_mode(), torch.autocast(autocast_device, dtype=autocast_dtype):
-        predictor.set_image(image_np)
-
-    # если логиты есть — восстанавливаем полностью
-    if logits_path.exists():
-        logits = np.load(logits_path, allow_pickle=True)
-        is_first_click = False
-    else:
-        logits = None
-        is_first_click = True
-
-    sessions[session_id] = {
-        "image": image_np,
-        "logits": logits,
-        "orig_name": base_name,
-        "points": [],
-        "is_first_click": is_first_click,
-    }    
-
-    print(f"[DEBUG] /load_result ready: {session_id}, contours: {len(contours)}")
     return {
-        "session_id": session_id,
-        "preview_b64": preview_b64,
-        "contours": contours,
+        "dir_name": dir_name,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "images": files_info
     }
 
+# --- НОВЫЙ эндпоинт: получить изображение из папки ---
+@app.get("/results/image_in_dir")
+def get_image_in_dir(
+    dir_name: str = Query(...), # Имя папки сессии
+    file_name: str = Query(...)  # Имя файла изображения
+):
+    """
+    Возвращает изображение из указанной папки сессии.
+    """
+    img_path = RESULTS_DIR / dir_name / file_name
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found in directory")
+
+    return FileResponse(img_path)
 

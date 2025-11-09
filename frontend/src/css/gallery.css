@@ -1,0 +1,88 @@
+/* frontend\src\css\gallery.css */
+
+@reference "tailwindcss";
+
+/* (Опционально) Определение кастомной темы */
+@theme {
+  /* ... */
+}
+
+/* (Опционально) Базовые стили */
+@layer base {
+  /* ... */
+}
+
+/* (Опционально) Стили компонентов */
+@layer components {
+
+  /* --- Стили для GalleryPanel --- */
+  /* Основной контейнер */
+  .gallery-panel {
+    @apply p-4; /* <-- Добавляем p-4 сюда */
+  }
+
+  /* Заголовок */
+  .gallery-panel h2 {
+    @apply text-lg font-semibold mb-3 text-gray-700; /* <-- Переносим стили заголовка сюда */
+  }
+
+  /* Сетка */
+  .gallery-panel .grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  /* Элемент сетки (контейнер изображения и названия) */
+  .gallery-panel .grid > div {
+    @apply border border-gray-200 rounded-lg shadow-sm overflow-hidden;
+  }
+
+  /* Изображение */
+  .gallery-panel .grid img {
+    @apply w-full h-auto cursor-pointer object-cover max-h-[150px];
+  }
+
+  /* --- НОВОЕ: Плейсхолдер для отсутствующего изображения --- */
+  .gallery-panel .grid .placeholder {
+    @apply w-full h-auto cursor-pointer object-cover max-h-[150px] flex items-center justify-center bg-gray-100 text-gray-500;
+  }
+  /* --- /НОВОЕ --- */
+
+
+  /* Название папки (последний div в элементе сетки) */
+  .gallery-panel .grid div > div:last-child {
+    @apply p-2 text-xs text-center text-gray-600 truncate;
+  }
+
+  /* Контейнер навигации */
+  .gallery-panel .pagination {
+    @apply flex justify-center mt-3 gap-2;
+  }
+
+  /* Кнопки навигации */
+  .gallery-panel .pagination button {
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-4 rounded-lg font-medium transition;
+  }
+
+  /* Кнопки навигации (когда отключены) */
+  .gallery-panel .pagination button:disabled {
+    @apply bg-gray-300 text-gray-500 border border-gray-400 cursor-not-allowed opacity-60;
+  }
+
+  /* --- Стили для ResultsModal (если они находятся здесь) ---
+  .modal-overlay { ... }
+  .modal-content { ... }
+  и т.д.
+  */
+}
+
+/* (Опционально) Стили утилит */
+@layer utilities {
+  /* ... */
+}
+
+/* Глобальные правки (оставляем твои) */
+body {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  background: #f8fafc;
+}

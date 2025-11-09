@@ -1,0 +1,79 @@
+/* frontend\src\css\results_modal.css */
+
+@reference "tailwindcss";
+
+/* (Опционально) Определение кастомной темы */
+@theme {
+  /* ... */
+}
+
+/* (Опционально) Базовые стили */
+@layer base {
+  /* ... */
+}
+
+/* (Опционально) Стили компонентов */
+@layer components {
+
+  /* --- Стили для ResultsModal --- */
+  .modal-overlay {
+    @apply fixed inset-0 bg-gray-500/50 flex items-center justify-center z-[1000] backdrop-blur-sm;
+  }
+
+  .modal-content {
+    @apply relative bg-white rounded-lg shadow-xl max-w-[90vw] max-h-[90vh] min-w-[50vw] min-h-[50vh] overflow-hidden flex flex-col;
+  }
+
+  .modal-close-btn {
+    @apply absolute top-2 right-2 bg-transparent border-none cursor-pointer p-1 rounded-full hover:bg-gray-100 z-[1001];
+  }
+
+  .modal-close-btn svg {
+    @apply w-5 h-5 text-gray-600;
+  }
+
+  .modal-loading,
+  .modal-error {
+    @apply p-4 text-center;
+  }
+
+  .modal-error {
+    @apply text-red-500;
+  }
+
+  .modal-image-container {
+    @apply flex-grow flex items-center justify-center p-4 bg-gray-100 min-h-[80vh] max-h-[80vh] overflow-auto;
+  }
+
+  .modal-image {
+    @apply max-w-full max-h-full object-contain;
+  }
+
+  .modal-info {
+    @apply p-2 text-center text-sm text-gray-600 border-t border-gray-200;
+  }
+
+  .modal-navigation {
+    @apply flex items-center justify-between p-2 border-t border-gray-200;
+  }
+
+  .nav-btn {
+    @apply bg-gray-100 border border-gray-300 rounded p-1 cursor-pointer text-lg hover:bg-gray-200;
+  }
+
+  .nav-btn:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .nav-info {
+    @apply text-sm text-gray-600;
+  }
+}
+
+/* (Опционально) Стили утилит */
+@layer utilities {
+  /* ... */
+}
+
+/* (Опционально) Глобальные правки - НЕТ, они в gallery.css или index.css */
+/* body { ... } */
