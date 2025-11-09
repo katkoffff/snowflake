@@ -25,25 +25,11 @@ export default function Sidebar() {
     autoGenConfig, setAutoGenConfig,
     setAutoMasks, setSelectedMaskIds, setConfirmedMasks, setMainMaskId,
     setSelectionConfirmed, setRefinementCompleted,
-    // УБРАНО: autoMasks // <-- Не деструктурируем autoMasks здесь, если не используем напрямую    
-    interactiveSubMode,
-    setInnerContours,
-    setInnerBox,
-    setHoverContour,
-    selectedInnerContours, setSelectedInnerContours,
-    isUpdatingSettings, setIsUpdatingSettings,
+    // УБРАНО: autoMasks // <-- Не деструктурируем autoMasks здесь, если не используем напрямую
   } = useApp();
-
-  const isInteractive = mode === 'interactive';
-  const isAuto = mode === 'auto';
-
-  // --- Определяем состояние кнопок ---
-  const finalizeBtnDisabled = mode !== 'interactive' || !sessionId;
-  const clearDirBtnDisabled = !sessionId;
 
   // --- Upload ---
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("load")
     const f = e.target.files?.[0];
     if (!f) return;
     const fd = new FormData();
@@ -53,20 +39,11 @@ export default function Sidebar() {
       // Выбираем эндпоинт в зависимости от режима
       const endpoint = mode === 'auto' ? '/init_autogen' : '/init';
       const res = await api.post(endpoint, fd);
-      console.log(res)
+
       setSessionId(res.data.session_id);
-      setPreview(`data:image/png;base64,${res.data.preview_b64}`);
+      setPreview(`image/png;base64,${res.data.preview_b64}`);
       setOverlay(null);
-      if (mode === 'interactive') {    
-        if (interactiveSubMode === 'main') {
-          setContours([]);
-        };
-        if (interactiveSubMode === 'inner') {
-          setInnerContours([]);
-          setSelectedInnerContours([]);
-        };
-      };
-    
+      setContours([]);
       // Обработка used_config (если пришёл)
       if (res.data.used_config) {
         const cfg = res.data.used_config;
@@ -82,7 +59,6 @@ export default function Sidebar() {
       if (mode === 'auto' && res.data.auto_masks) {
         setAutoMasks(res.data.auto_masks);
         // Сбрасываем связанные с выбором/подтверждением состояния
-        setContours([]);
         setSelectedMaskIds([]);
         setConfirmedMasks([]);
         setMainMaskId(null);
@@ -99,158 +75,45 @@ export default function Sidebar() {
 
   // --- Save ---
   const handleSave = async () => {
-  if (!sessionId) return alert("No session");
-
-  setLoading(true);
-  try {
-    const form = new FormData();
-    form.append("session_id", sessionId);
-
-    if (selectedInnerContours.length > 0) {
+    if (!sessionId) return alert("No session");
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append("session_id", sessionId);
       form.append("save", "true");
-      form.append("selected", selectedInnerContours.join(","));
-      const res = await api.post("/segment_inner", form);
-      alert(`Saved ${res.data.saved.count} contours`);
-      setRefreshGallery(true);
-      return;
+      const res = await api.post("/segment", form); // Пока используем старый endpoint
+      if (res.data.saved?.jpg) {
+        alert(`Saved:\n${res.data.saved.jpg}`);
+        setRefreshGallery(true);
+      }
+    } catch {
+      alert("Save failed");
+    } finally {
+      setLoading(false);
     }
-
-    // fallback main
-    form.append("save", "true");
-    const r = await api.post("/segment_main", form);
-    alert(`Saved Main on path ${r.data.saved}`);
-    setRefreshGallery(true);
-
-  } finally {
-    setLoading(false);
-  }
-};
-
+  };
 
   // --- Reset ---
   const handleReset = async () => {
     if (!sessionId) return;
     const form = new FormData();
     form.append("session_id", sessionId);
-    form.append("submode", interactiveSubMode);
     await api.post("/reset", form);
-    setOverlay(null);    
+    setOverlay(null);
+    setContours([]);
     setPoints([]); // <-- очищаем точки тоже
-    if (mode === 'interactive') {    
-      if (interactiveSubMode === 'main') {
-        setContours([]);
-      };
-      if (interactiveSubMode === 'inner') {
-        setInnerContours([]);
-        setSelectedInnerContours([]);
-      };
-    };
     // Сбрасываем состояния автогенерации
-    if (mode === 'auto') {
-      setContours([]);
-      setAutoMasks(null);
-      setSelectedMaskIds([]);
-      setConfirmedMasks([]);
-      setMainMaskId(null);
-      setSelectionConfirmed(false);
-      setRefinementCompleted(false);
-    };  
+    setAutoMasks(null);
+    setSelectedMaskIds([]);
+    setConfirmedMasks([]);
+    setMainMaskId(null);
+    setSelectionConfirmed(false);
+    setRefinementCompleted(false);
   };
-
-  // --- Finalize ---
-  const handleFinalize = async () => {
-    if (!sessionId) return alert("No session to finalize.");
-    setLoading(true);
-    try {
-      const form = new FormData();
-      form.append("session_id", sessionId);
-      const res = await api.post("/save_all", form);
-      alert(`Final image saved: ${res.data.final}`);
-      // Опционально: обновить галерею, если финальное изображение туда попадает
-      setRefreshGallery(true);
-    } catch (err) {
-      console.error("Finalize failed:", err);
-      alert("Finalize failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // --- Clear Session Directory ---
-  const handleClearDir = async () => {
-    if (!sessionId) return alert("No session to clear.");
-    const confirmed = window.confirm("Are you sure you want to delete all files in the session directory?");
-    if (!confirmed) return;
-
-    setLoading(true);
-    try {
-      const form = new FormData();
-      form.append("session_id", sessionId);
-      // --- ПОЛУЧАЕМ ОТВЕТ ---
-      const res = await api.post("/clear_session_dir", form);
-      console.log("[DEBUG] Clear dir response:", res.data); // <-- Для отладки
-      alert("Session directory cleared.");
-
-      // --- СБРОС ВСЕХ СОСТОЯНИЙ ПОСЛЕ УСПЕШНОГО ОТВЕТА ---
-      setPreview(null);
-      setOverlay(null);
-      setContours([]);
-      setPoints([]);
-      // Сброс состояний автогенерации
-      setAutoMasks(null);
-      setSelectedMaskIds([]);
-      setConfirmedMasks([]);
-      setMainMaskId(null);
-      setSelectionConfirmed(false);
-      setRefinementCompleted(false);
-      // Сброс состояний inner
-      setInnerBox(null);
-      setInnerContours([]);
-      setSelectedInnerContours([]);
-      setHoverContour(null);
-      // Сброс других, если есть
-      setSessionId(null); // <-- Сбрасываем session_id ПОСЛЕ УСПЕШНОГО ОТВЕТА
-      setRefreshGallery(true);
-
-    } catch (err) {
-      console.error("Clear directory failed:", err);
-      // --- СБРОС ВСЕХ СОСТОЯНИЙ ТАКЖЕ И В СЛУЧАЕ ОШИБКИ ---
-      // Если бэкенд удалил сессию (или файлы), но что-то пошло не так,
-      // лучше сбросить фронтенд, чтобы избежать несогласованности.
-      setPreview(null);
-      setOverlay(null);
-      setContours([]);
-      setPoints([]);
-      setAutoMasks(null);
-      setSelectedMaskIds([]);
-      setConfirmedMasks([]);
-      setMainMaskId(null);
-      setSelectionConfirmed(false);
-      setRefinementCompleted(false);
-      setInnerBox(null);
-      setInnerContours([]);
-      setSelectedInnerContours([]);
-      setHoverContour(null);
-      setSessionId(null); // <-- Сбрасываем session_id даже при ошибке
-      setRefreshGallery(true);
-      // --- /Сброс ---
-      alert("Clear directory failed. Session state reset locally.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
 
   // --- Update Settings (для препроцессинга) ---
   const handlePreprocessingSettingChange = async (key: string, value: number) => {
-    // Проверяем, идёт ли сейчас обновление
-    if (isUpdatingSettings) {
-      // Игнорируем, если обновление уже в процессе
-      return;
-    }
-    // Обновляем состояние в AppContext
-    setIsUpdatingSettings(true);
+    // локально обновляем значение
     switch (key) {
       case "medianKsize":
         setMedianKsize(value);
@@ -284,7 +147,7 @@ export default function Sidebar() {
 
         const res = await api.post("/update_settings", form);
         if (res.data.preview_b64) {
-          setPreview(`data:image/png;base64,${res.data.preview_b64}`);
+          setPreview(`image/png;base64,${res.data.preview_b64}`);
           setOverlay(null);
         }
       } catch (err) {
@@ -292,21 +155,13 @@ export default function Sidebar() {
         alert("Settings update failed");
       } finally {
         setLoading(false);
-        // ВСЕГДА сбрасываем флаг в AppContext
-        setIsUpdatingSettings(false);
       }
-    } else {
-        // Если sessionId нет или режим не interactive, просто сбрасываем флаг в AppContext
-        setIsUpdatingSettings(false);
-      }
-
+    }
   };
 
-  const handleAutoGenSettingChange = <K extends keyof AutoGenConfig>(
-    key: K,
-    value: AutoGenConfig[K]
-  ) => {
-    setAutoGenConfig((prev: AutoGenConfig) => ({
+  // --- Update AutoGen Settings ---
+  const handleAutoGenSettingChange = (key: keyof AutoGenConfig, value: any) => { // <-- Тип 'any' для value можно уточнить позже, если нужно
+    setAutoGenConfig(prev => ({ // <-- Тип 'prev' теперь выводится из типа setAutoGenConfig
       ...prev,
       [key]: value
     }));
@@ -352,7 +207,7 @@ export default function Sidebar() {
 
   return (
     <div className="sidebar flex flex-col gap-3 p-4">
-      <input key={`file-input-${sessionId || 'cleared'}`} type="file" ref={fileInput} className="hidden" onChange={handleFileSelect}/>
+      <input type="file" ref={fileInput} className="hidden" onChange={handleFileSelect} />
 
       {/* Переключатель режима */}
       <div className="mode-selector mb-2">
@@ -380,22 +235,6 @@ export default function Sidebar() {
         Reset
       </button>
 
-      <button
-        className="btn-secondary" // <-- Убираем условный класс btn-disabled, он теперь определяется :disabled
-        onClick={handleFinalize}
-        disabled={finalizeBtnDisabled} // <-- Это важно для :disabled
-      >
-        Finalize
-      </button>
-
-      <button
-        className="btn-secondary" // <-- Убираем условный класс btn-disabled
-        onClick={handleClearDir}
-        disabled={clearDirBtnDisabled} // <-- Это важно для :disabled
-      >
-        Clear Dir
-      </button>
-
       {/* Условный рендеринг блока настроек */}
       {mode === 'interactive' ? (
         <>
@@ -406,7 +245,7 @@ export default function Sidebar() {
               <input type="range" min="1" max="11" step="2"
                      value={medianKsize}
                      onChange={(e) => handlePreprocessingSettingChange("medianKsize", parseInt(e.target.value))}
-                     disabled={!!sessionId && isAuto || isUpdatingSettings} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode === 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -414,7 +253,7 @@ export default function Sidebar() {
               <input type="range" min="0.5" max="3" step="0.1"
                      value={contrastFactor}
                      onChange={(e) => handlePreprocessingSettingChange("contrastFactor", parseFloat(e.target.value))}
-                     disabled={!!sessionId && isAuto || isUpdatingSettings} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode === 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -422,7 +261,7 @@ export default function Sidebar() {
               <input type="range" min="0.5" max="5" step="0.1"
                      value={sharpnessFactor}
                      onChange={(e) => handlePreprocessingSettingChange("sharpnessFactor", parseFloat(e.target.value))}
-                     disabled={!!sessionId && isAuto || isUpdatingSettings} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode === 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -430,7 +269,7 @@ export default function Sidebar() {
               <input type="range" min="1" max="10" step="0.1"
                      value={claheClipLimit}
                      onChange={(e) => handlePreprocessingSettingChange("claheClipLimit", parseFloat(e.target.value))}
-                     disabled={!!sessionId && isAuto || isUpdatingSettings} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode === 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -438,7 +277,7 @@ export default function Sidebar() {
               <input type="range" min="4" max="16" step="1"
                      value={claheTileGrid[0]}
                      onChange={(e) => handlePreprocessingSettingChange("claheTileGrid", parseInt(e.target.value))}
-                     disabled={!!sessionId && isAuto || isUpdatingSettings} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode === 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
           </div>
@@ -452,7 +291,7 @@ export default function Sidebar() {
               <input type="range" min="16" max="64" step="16"
                      value={autoGenConfig.points_per_side}
                      onChange={(e) => handleAutoGenSettingChange("points_per_side", parseInt(e.target.value))}
-                     disabled={!!sessionId && isInteractive} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode !== 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -460,7 +299,7 @@ export default function Sidebar() {
               <input type="range" min="0.5" max="1.0" step="0.05"
                      value={autoGenConfig.pred_iou_thresh}
                      onChange={(e) => handleAutoGenSettingChange("pred_iou_thresh", parseFloat(e.target.value))}
-                     disabled={!!sessionId && isInteractive} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode !== 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -468,7 +307,7 @@ export default function Sidebar() {
               <input type="range" min="0.5" max="1.0" step="0.05"
                      value={autoGenConfig.stability_score_thresh}
                      onChange={(e) => handleAutoGenSettingChange("stability_score_thresh", parseFloat(e.target.value))}
-                     disabled={!!sessionId && isInteractive} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode !== 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -476,7 +315,7 @@ export default function Sidebar() {
               <input type="range" min="10" max="500" step="10"
                      value={autoGenConfig.min_mask_region_area}
                      onChange={(e) => handleAutoGenSettingChange("min_mask_region_area", parseFloat(e.target.value))}
-                     disabled={!!sessionId && isInteractive} // <-- Сравнение теперь корректно
+                     disabled={!!sessionId && mode !== 'auto'} // <-- Сравнение теперь корректно
                      />
             </div>
             <div className="setting">
@@ -485,7 +324,7 @@ export default function Sidebar() {
                   type="checkbox"
                   checked={autoGenConfig.use_m2m}
                   onChange={(e) => handleAutoGenSettingChange("use_m2m", e.target.checked)}
-                  disabled={!!sessionId && isInteractive} // <-- Сравнение теперь корректно
+                  disabled={!!sessionId && mode !== 'auto'} // <-- Сравнение теперь корректно
                 /> Use M2M
               </label>
             </div>

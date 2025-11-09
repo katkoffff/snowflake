@@ -1,10 +1,67 @@
+/* frontend/src/css/sidebar.css */
+
+/* Импорт основного CSS-файла Tailwind CSS */
 @reference "tailwindcss";
-.sidebar .btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition;
+
+/* (Опционально) Определение кастомной темы */
+@theme {
+  /* Пример: переопределение шрифта */
+  /* font-family: system-ui; */
+  /* font-weight: 450; */
+  /* color-scheme: dark; */
 }
-.sidebar .btn-secondary {
-  @apply bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-lg font-medium transition;
+
+/* (Опционально) Базовые стили */
+@layer base {
+  /* Тут можно писать базовые стили */
 }
-.sidebar .btn-danger {
-  @apply bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-medium transition;
+
+/* (Опционально) Стили компонентов */
+@layer components {
+  /* Тут можно определять стили для компонентов */
+
+  /* Стили для кнопок */
+  .sidebar .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium transition;
+  }
+
+  .sidebar .btn-secondary {
+    @apply bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg font-medium transition; /* Зелёный цвет для активной кнопки */
+  }
+
+  .sidebar .btn-danger {
+    @apply bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg font-medium transition;
+  }
+
+  /* Стили для *всех* кнопок с классом .btn-... когда они disabled */
+  .sidebar .btn-primary:disabled,
+  .sidebar .btn-secondary:disabled,
+  .sidebar .btn-danger:disabled {
+    @apply bg-gray-300 text-gray-500 border border-gray-400 cursor-not-allowed opacity-60;
+    /* bg-gray-300: светло-серый фон */
+    /* text-gray-500: серый текст */
+    /* border border-gray-400: серая граница (если кнопка её использует) */
+    /* cursor-not-allowed: курсор "запрещено" */
+    /* opacity-60: немного прозрачности */
+  }
+
+  /* Или, если хочешь использовать отдельный класс .btn-disabled */
+  /* .btn-disabled - это кастомный класс, его нужно будет добавить в className в Sidebar.tsx */
+  /* .sidebar .btn-primary.btn-disabled,
+  .sidebar .btn-secondary.btn-disabled,
+  .sidebar .btn-danger.btn-disabled {
+    @apply bg-gray-300 text-gray-500 border border-gray-400 cursor-not-allowed opacity-60;
+  } */
+}
+
+/* (Опционально) Стили утилит */
+@layer utilities {
+  /* Тут можно определять стили для утилит */
+}
+
+/* Глобальные правки (оставляем твои) */
+body {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  background: #f8fafc;
 }
