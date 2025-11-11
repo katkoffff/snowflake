@@ -60,9 +60,10 @@ export default function Sidebar() {
       setPoints([]); // <-- очищаем точки тоже
       if (mode === 'interactive') {    
         if (interactiveSubMode === 'main') {
-          setContours([]);
+          setContours([]);          
         };
         if (interactiveSubMode === 'inner') {
+          setInnerBox(null);
           setInnerContours([]);
           setSelectedInnerContours([]);
         };

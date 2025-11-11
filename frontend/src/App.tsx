@@ -6,6 +6,9 @@ import GalleryPanel from "./components/GalleryPanel";
 import Footer from "./components/Footer";
 import { AppProvider } from "./context/AppContext";
 
+//flex items-center justify-center bg-gray-100 overflow-y-auto h-0
+//flex items-center justify-center bg-gray-100
+
 export default function App() {
   return (
     <AppProvider>
@@ -16,7 +19,7 @@ export default function App() {
         <aside className="border-r border-gray-200 bg-white overflow-y-auto">
           <Sidebar />
         </aside>
-        <main className="flex items-center justify-center bg-gray-100 overflow-hidden">
+        <main className="bg-gray-100 overflow-hidden">
           <EditorPanel />
         </main>
         <aside className="border-l border-gray-200 bg-white overflow-y-auto">

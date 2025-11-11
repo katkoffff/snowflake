@@ -98,7 +98,7 @@ export default function EditorPanel() {
           ctx.strokeStyle = isHovered
             ? "rgba(255,0,0,1)"
             : isSelected
-            ? "rgba(255,255,255,1)"
+            ? "rgba(243, 8, 106, 0.99)"
             : "rgba(0,255,255,0.7)";
           ctx.beginPath();
           c.forEach(([x, y], i) => {
@@ -227,6 +227,7 @@ export default function EditorPanel() {
         x: Math.round((ev.clientX - rect.left) * scaleX),
         y: Math.round((ev.clientY - rect.top) * scaleY),
       });
+      drawOverlay();
     };
 
     const onUp = () => { //ev: MouseEvent
@@ -328,109 +329,110 @@ export default function EditorPanel() {
   // ------------------------------
   // 🔹 РЕНДЕР
   // ------------------------------
+  //editor-panel flex flex-row w-full h-full overflow-auto
+  //editor-panel flex flex-col items-center justify-center w-full overflow-auto
+  //editor-panel flex flex-row w-full h-full overflow-auto flex-1 min-h-0
   return (
-    <div className="editor-panel flex flex-row w-full h-full">
-      <div className="flex flex-col items-center justify-center flex-1">
+  <div className="editor-panel flex flex-row w-full h-full overflow-hidden">
+
+    {/* ==== ЛЕВАЯ ЧАСТЬ — изображение + кнопки + подсказки ==== */}
+    <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+
+      {/* КНОПКИ MAIN / INNER */}
+      <div className="flex items-center justify-center py-3 flex-none">
+        <button
+          onClick={switchToMain}
+          className={`px-4 py-2 rounded ${
+            interactiveSubMode === "main"
+              ? "bg-blue-600 text-white"
+              : "bg-gray-300"
+          }`}
+        >
+          MAIN
+        </button>
+        <button
+          onClick={switchToInner}
+          className={`ml-3 px-4 py-2 rounded ${
+            interactiveSubMode === "inner"
+              ? "bg-yellow-600 text-white"
+              : "bg-gray-300"
+          }`}
+        >
+          INNER
+        </button>
+      </div>
+
+      {/* ПРОКРУТКА ДЛЯ КАРТИНКИ */}
+      <div className="flex-1 overflow-auto flex items-center justify-center px-4 py-2">        
         {!preview ? (
-          <div className="text-gray-400 text-lg">Upload an image to start ❄️</div>
+          <div className="text-gray-400 text-lg">
+            Upload an image to start ❄️
+          </div>
         ) : (
-          <>
-            <div className="mb-3 flex gap-3">
-              <button
-                onClick={switchToMain}
-                className={`px-4 py-2 rounded ${
-                  interactiveSubMode === "main"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-300"
-                }`}
-              >
-                MAIN
-              </button>
-              <button
-                onClick={switchToInner}
-                className={`px-4 py-2 rounded ${
-                  interactiveSubMode === "inner"
-                    ? "bg-yellow-600 text-white"
-                    : "bg-gray-300"
-                }`}
-              >
-                INNER
-              </button>
-            </div>
+          <div className="relative inline-block select-none">
+            <img
+              ref={imgRef}
+              src={overlay || preview || undefined}
+              alt="preview"
+              className="max-w-none h-auto cursor-crosshair"
+              style={{ opacity: isUpdatingSettings ? 0.5 : 1 }}
+              onMouseDown={handleMouseDown}
+              onContextMenu={(e) => e.preventDefault()}
+              draggable={false}
+            />
+            <canvas
+              ref={canvasRef}
+              className="absolute left-0 top-0 pointer-events-none"
+            />
 
-            <div className="relative inline-block select-none">
-              <img
-                ref={imgRef}
-                src={overlay || preview || undefined}
-                alt="preview"
-                className="max-w-[80vw] h-auto cursor-crosshair"
-                style={{ opacity: isUpdatingSettings ? 0.5 : 1 }} // <-- Опционально: затемнить изображение
-                onMouseDown={handleMouseDown}
-                onContextMenu={(e) => e.preventDefault()}
-                draggable={false}
-              />
-              <canvas
-                ref={canvasRef}
-                className="absolute left-0 top-0 pointer-events-none"
-              />
-              {/* --- СПИННЕР --- */}
-              {isUpdatingSettings && (
-                <div
-                  className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10" // z-10 должен быть выше canvas, но ниже других UI элементов
-                >
-                  {/* Простой CSS-анимированный спиннер */}
-                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              )}
-              {/* --- /СПИННЕР --- */}
-            </div>
-
-            {interactiveSubMode === "inner" && (
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => {
-                    setInnerBox(null);
-                    setPoints([]);
-                    setOverlay(null);
-                    setContours([]);                    
-                    setInnerContours([]);
-                    setSelectedInnerContours([]);
-                  }}
-                  className={`px-4 py-2 rounded ${
-                    innerBox
-                      ? "bg-red-600 text-white"
-                      : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  }`}
-                  disabled={!innerBox}
-                >
-                  Reset inner box
-                </button>
-                {/*{innerContours.length > 0 && (
-                  <button
-                    onClick={handleSaveInner}
-                    className="px-4 py-2 bg-green-600 text-white rounded"
-                  >
-                    Save selected
-                  </button>
-                )} */}
+            {/* СПИННЕР */}
+            {isUpdatingSettings && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 z-10">
+                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             )}
-
-            <div className="mt-3 text-gray-600 text-sm">
-              {interactiveSubMode === "main" &&
-                "ЛКМ — объект, ПКМ — фон. Итеративная сегментация."}
-              {interactiveSubMode === "inner" &&
-                (!innerBox
-                  ? "ЛКМ — растянуть бокс."
-                  : "ЛКМ — объект, ПКМ — фон внутри бокса.")}
-            </div>
-          </>
+          </div>
         )}
       </div>
 
-      {/* 🔸 СПРАВА — ПАНЕЛЬ КОНТУРОВ */}
-      {interactiveSubMode === "inner" && innerContours.length > 0 && (
-      <div className="w-[250px] h-full overflow-y-auto border-l border-gray-300 bg-gray-50 p-2">
+      {/* КНОПКИ INNER (RESET BOX) */}
+      {interactiveSubMode === "inner" && (
+        <div className="flex justify-center py-3 flex-none">
+          <button
+            onClick={() => {
+              setInnerBox(null);
+              setPoints([]);
+              setOverlay(null);
+              setContours([]);
+              setInnerContours([]);
+              setSelectedInnerContours([]);
+            }}
+            className={`px-4 py-2 rounded ${
+              innerBox
+                ? "bg-red-600 text-white"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+            }`}
+            disabled={!innerBox}
+          >
+            Reset inner box
+          </button>
+        </div>
+      )}
+
+      {/* ПОДСКАЗКИ */}
+      <div className="text-center text-gray-600 text-sm py-2 flex-none">
+        {interactiveSubMode === "main" &&
+          "ЛКМ — объект, ПКМ — фон. Итеративная сегментация."}
+        {interactiveSubMode === "inner" &&
+          (!innerBox
+            ? "ЛКМ — растянуть бокс."
+            : "ЛКМ — объект, ПКМ — фон внутри бокса.")}
+      </div>
+    </div>
+
+    {/* ==== ПРАВАЯ КОЛОНКА — панель контуров ==== */}
+    {interactiveSubMode === "inner" && innerContours.length > 0 && (
+      <div className="w-[250px] h-full overflow-auto border-l border-gray-300 bg-gray-50 p-2 flex-none">
         <h3 className="text-gray-700 font-semibold mb-2 text-center">
           Контуры
         </h3>
@@ -458,6 +460,7 @@ export default function EditorPanel() {
         ))}
       </div>
     )}
-    </div>
-  );
+  </div>
+);
+
 }
