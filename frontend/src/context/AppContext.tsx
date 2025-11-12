@@ -1,6 +1,7 @@
 // frontend\src\context\AppContext.tsx
 import React, { createContext, useState } from "react";
 import type { AutoGenMask, AutoGenConfig, ConfirmedMask } from "../types/autogen";
+//import type { AnalysisResult } from "../types/analysing";
 
 // --- Типы ---
 export type Pt = { x: number; y: number; label: number }; // label: 1 = object (left), 0 = background (right)
@@ -96,7 +97,10 @@ export type AppContextType = {
   initialFolderNameForModal: string | null;
   setInitialFolderNameForModal: (folderName: string | null) => void;
   // --- /НОВОЕ ---
-
+  // --- НОВОЕ: Состояния для AnalysisModal ---
+  isAnalysisModalOpen: boolean;
+  setIsAnalysisModalOpen: (isOpen: boolean) => void;  
+  // --- /НОВОЕ ---
 };
   
 
@@ -162,6 +166,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- НОВОЕ: Состояния для ResultsModal ---
   const [isResultsModalOpen, setIsResultsModalOpen] = useState<boolean>(false);
   const [initialFolderNameForModal, setInitialFolderNameForModal] = useState<string | null>(null);
+  // --- /НОВОЕ ---
+  // --- НОВОЕ: Состояния для AnalysisModal ---
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState<boolean>(false);  
   // --- /НОВОЕ ---
 
   return (
@@ -235,6 +242,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsResultsModalOpen,
         initialFolderNameForModal,
         setInitialFolderNameForModal,
+        // --- /НОВОЕ ---
+        // --- НОВОЕ: Значения для AnalysisModal ---
+        isAnalysisModalOpen,
+        setIsAnalysisModalOpen,        
         // --- /НОВОЕ ---
       }}
     >

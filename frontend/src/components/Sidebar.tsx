@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { useApp } from "../hooks/useAppContext"; // Убедись, что путь к хуку правильный
 // --- ИМПОРТ ТИПА ---
 import type { AutoGenConfig } from "../types/autogen";
+import AnalysisModal from "../modals/AnalysisModal";
 import "../css/sidebar.css";
 
 export default function Sidebar() {
@@ -32,6 +33,10 @@ export default function Sidebar() {
     setHoverContour,
     selectedInnerContours, setSelectedInnerContours,
     isUpdatingSettings, setIsUpdatingSettings,
+    // --- НОВОЕ: Переменные для AnalysisModal ---
+    //isAnalysisModalOpen,
+     setIsAnalysisModalOpen,    
+    // --- /НОВОЕ ---
   } = useApp();
 
   const isInteractive = mode === 'interactive';
@@ -314,6 +319,33 @@ export default function Sidebar() {
     }));
   };
 
+  // --- Handle Analyze Results ---
+  const handleAnalyzeResults = async () => {
+    //if (!sessionId) {
+    //  alert("No session to analyze. Upload an image first.");
+    //  return;
+    //}
+
+    setLoading(true);
+    try {
+      // Вызываем эндпоинт анализа
+      const res = await api.post("/analyze_results", new FormData()); // formData пустая, т.к. endpoint принимает только session_id
+      console.log("[DEBUG] Analyze results response:", res.data);
+
+      if (res.data.results_path) {        
+        // Открываем модальное окно анализа
+        setIsAnalysisModalOpen(true);
+      } else {
+        alert("Analyze failed: No results path returned.");
+      }
+    } catch (err) {
+      console.error("Analyze failed:", err);
+      alert("Analyze failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- Перегенерация при изменении настроек (в режиме 'auto') ---
   useEffect(() => {
     if (mode === 'auto' && sessionId && autoGenConfig) {
@@ -396,6 +428,15 @@ export default function Sidebar() {
         disabled={clearDirBtnDisabled} // <-- Это важно для :disabled
       >
         Clear Dir
+      </button>
+
+      {/* --- НОВАЯ КНОПКА: Analyze Results --- */}
+      <button
+        className="btn-secondary"
+        onClick={handleAnalyzeResults}
+        //disabled={!sessionId} // Отключена, если нет сессии
+      >
+        Analyze Results
       </button>
 
       {/* Условный рендеринг блока настроек */}
@@ -495,6 +536,8 @@ export default function Sidebar() {
           </div>
         </>
       )}
+      {/* --- РЕНДЕРИМ AnalysisModal --- */}
+      <AnalysisModal />
     </div>
   );
 }

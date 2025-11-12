@@ -15,11 +15,48 @@ import json
 import time
 import uuid
 from io import BytesIO
-from PIL import Image, ImageEnhance
+import io
+from PIL import Image, ImageEnhance, ImageDraw
 from pathlib import Path
 from skimage import measure
 import traceback # <-- Для отладки
 import shutil
+import datetime
+from pydantic import BaseModel
+from typing import List, Dict
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+
+class MiniatureData(BaseModel):
+    image_path: str
+    image_file: str
+    display_x: float
+    display_y: float
+    display_width: float
+    display_height: float
+    dot_x: float
+    dot_y: float
+    svg_x: float
+    svg_y: float
+
+class PointData(BaseModel):
+    x: float
+    y: float
+    color: str = "blue"
+
+class AxesData(BaseModel):
+    x_label: str = "Normalized Perimeter (L/Lc)"
+    y_label: str = "Normalized Area (S/Sc)" 
+    x_range: List[float] = [0, 1]
+    y_range: List[float] = [0, 1]
+
+class SaveChartRequest(BaseModel):
+    points: List[PointData]
+    axes: AxesData
+    miniatures: List[MiniatureData]  
+    viewport_size: dict   
 
 app = FastAPI(title="Snowflakes SAM iterative API")
 
@@ -53,6 +90,8 @@ print(f"[DEBUG] Autocast dtype: {autocast_dtype}, device: {autocast_device}") # 
 
 RESULTS_DIR = Path("results")
 RESULTS_DIR.mkdir(exist_ok=True)
+GRAPH_DIR = Path("graph")
+GRAPH_DIR.mkdir(exist_ok=True)
 
 # In-memory sessions store (simple)
 sessions: dict = {}  # session_id -> { "image": np.ndarray, "logits": np.ndarray|None, "orig_name": str, "points": list, "is_first_click": bool }
@@ -1061,3 +1100,185 @@ def get_image_in_dir(
 
     return FileResponse(img_path)
 
+@app.post("/analyze_results")
+async def analyze_results():
+    """
+    Analyzes all saved sessions in RESULTS_DIR.
+    Reads all_contours.npy, calculates metrics for main and slave masks,
+    saves results to analysis_results.json.
+    """
+    print("[DEBUG] /analyze_results called")
+    analysis_data = []
+
+    # Проходим по всем подпапкам в RESULTS_DIR
+    for session_dir_path in RESULTS_DIR.iterdir():
+        if not session_dir_path.is_dir():
+            continue
+
+        # Проверяем наличие all_contours.npy
+        all_contours_path = session_dir_path / "all_contours.npy"
+        if not all_contours_path.exists():
+            print(f"[DEBUG] Skipping {session_dir_path.name}, no all_contours.npy found")
+            continue
+
+        main_image_path = session_dir_path / "main.jpg" # <-- Используем main.jpg
+        if not main_image_path.exists():
+            print(f"[DEBUG] Skipping {session_dir_path.name}, no main.jpg found")
+            continue
+
+        try:
+            # --- ЗАГРУЗКА all_contours.npy ---
+            # allow_pickle=True необходим для загрузки объектов Python
+            all_contours_info = np.load(str(all_contours_path), allow_pickle=True)
+
+            # --- РАЗДЕЛЕНИЕ КОНТУРОВ ---
+            main_contour = None
+            slave_contours = []
+            for info in all_contours_info:
+                contour_type = info.get("type")
+                contour_pts = np.array(info.get("contour", []), dtype=np.int32)
+                if contour_type == "main":
+                    main_contour = contour_pts
+                elif contour_type.startswith("slave_"):
+                    if contour_pts.size > 0: # Убедимся, что контур не пуст
+                        slave_contours.append(contour_pts)
+
+            if main_contour is None:
+                print(f"[DEBUG] Skipping {session_dir_path.name}, no 'main' contour found in all_contours.npy")
+                continue
+
+            # --- ВЫЧИСЛЕНИЕ МЕТРИК ---
+
+            # --- Для MAIN ---
+            main_perimeter = cv2.arcLength(main_contour, closed=True)
+            main_area = cv2.contourArea(main_contour)
+            _, main_enclosing_radius = cv2.minEnclosingCircle(main_contour)
+
+            # --- Для SLAVE (суммарно) ---
+            total_slave_perimeter = 0.0
+            total_slave_area = 0.0
+            for sc in slave_contours:
+                total_slave_perimeter += cv2.arcLength(sc, closed=True)
+                total_slave_area += cv2.contourArea(sc)
+
+            # --- ИТОГОВЫЕ МЕТРИКИ ДЛЯ СНЕЖИНКИ ---
+            total_perimeter = main_perimeter + total_slave_perimeter
+            total_area = main_area - total_slave_area # Вычитаем площадь дыр
+
+            # --- НОРМАЛИЗАЦИЯ ОТНОСИТЕЛЬНО ОПИСАННОЙ ОКРУЖНОСТИ (main) ---
+            if main_enclosing_radius > 0:
+                normalized_perimeter = total_perimeter / (2 * np.pi * main_enclosing_radius)
+                normalized_area = total_area / (np.pi * main_enclosing_radius**2)
+            else:
+                # Если радиус 0 (что маловероятно), ставим NaN или 0
+                print(f"[WARN] Enclosing radius is 0 for {session_dir_path.name}, setting metrics to 0.")
+                normalized_perimeter = 0.0
+                normalized_area = 0.0
+
+            # --- СОХРАНЕНИЕ ДАННЫХ ---
+            analysis_data.append({
+                "session_folder": session_dir_path.name,
+                "normalized_perimeter": normalized_perimeter,
+                "normalized_area": normalized_area,
+                "main_image_path": str(main_image_path.relative_to(RESULTS_DIR)) # Сохраняем относительный путь
+            })
+
+        except Exception as e:
+            print(f"[ERROR] Failed to analyze session {session_dir_path.name}: {e}")
+            traceback.print_exc() # Для отладки
+            continue # Пропускаем эту сессию, если произошла ошибка
+
+    # --- СОХРАНЕНИЕ РЕЗУЛЬТАТОВ ---
+    results_file_path = RESULTS_DIR / "analysis_results.json"
+    with open(results_file_path, 'w') as f:
+        json.dump(analysis_data, f, indent=2)
+
+    print(f"[DEBUG] Analysis completed, results saved to {results_file_path}")
+    return {"results_path": str(results_file_path.relative_to(Path(".")))} # Относительно корня проекта
+
+# --- В main.py, рядом с другими эндпоинтами ---
+
+@app.get("/analysis_results") # <-- НОВЫЙ эндпоинт
+async def get_analysis_results():
+    """
+    Возвращает содержимое analysis_results.json
+    """
+    results_file_path = RESULTS_DIR / "analysis_results.json"
+    if not results_file_path.exists():
+        raise HTTPException(status_code=404, detail="Analysis results file not found")
+
+    try:
+        with open(results_file_path, 'r') as f:
+            data = json.load(f)
+        return data # FastAPI автоматически конвертирует dict/list в JSONResponse
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] Failed to decode analysis_results.json: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read analysis results file")
+    except Exception as e:
+        print(f"[ERROR] Failed to read analysis_results.json: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read analysis results file")
+
+@app.post("/analysis_save_chart")
+async def save_chart(request: SaveChartRequest):
+    try:
+        # Создаем стандартный график
+        fig, ax = plt.subplots(figsize=(16, 12))
+        
+        # 1. Рисуем точки в координатах данных
+        x_coords = [point.x for point in request.points]
+        y_coords = [point.y for point in request.points]
+        colors = [point.color for point in request.points]
+        
+        ax.scatter(x_coords, y_coords, c=colors, s=50, alpha=0.7, edgecolors='black', linewidth=0.5)
+        
+        # 2. Настраиваем оси
+        ax.set_xlabel(request.axes.x_label, fontsize=12)
+        ax.set_ylabel(request.axes.y_label, fontsize=12)
+        ax.set_xlim(request.axes.x_range)
+        ax.set_ylim(request.axes.y_range)
+        ax.grid(True, alpha=0.3)
+        
+        # 3. Рисуем миниатюры и линии В СИСТЕМЕ ДАННЫХ
+        for miniature in request.miniatures:
+            try:
+                img_path = RESULTS_DIR / miniature.image_path / miniature.image_file
+                if img_path.exists():
+                    img = plt.imread(img_path)
+                    
+                    # ВСЕ КООРДИНАТЫ УЖЕ В СИСТЕМЕ ДАННЫХ!
+                    height, width = img.shape[:2]
+                    scale = 48.0 / max(height, width) 
+                    imagebox = OffsetImage(img, zoom=scale)
+                    ab = AnnotationBbox(imagebox, 
+                                      (miniature.svg_x, miniature.svg_y),  # координаты в системе данных
+                                      frameon=True,
+                                      pad=0.1,
+                                      bboxprops=dict(edgecolor='gray', linewidth=1))
+                    ax.add_artist(ab)
+                    
+                    # Линия от точки к миниатюре (обе координаты в системе данных)
+                    ax.plot([miniature.dot_x, miniature.svg_x], 
+                           [miniature.dot_y, miniature.svg_y], 
+                           'gray', linestyle='-', linewidth=1, alpha=0.7)
+                    
+            except Exception as e:
+                print(f"Error processing miniature: {e}")
+                continue
+        
+        # Сохраняем
+        save_dir = GRAPH_DIR / "saved_charts"
+        save_dir.mkdir(exist_ok=True)
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"analysis_chart_{timestamp}.jpg"
+        file_path = save_dir / filename
+        
+        plt.savefig(file_path, dpi=150) #, bbox_inches='tight') #, format='jpg')
+        plt.close()
+        
+        return {"status": "success"}
+        
+    except Exception as e:
+        print(f"Error saving chart: {e}")
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}

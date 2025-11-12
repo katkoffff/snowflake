@@ -1,0 +1,150 @@
+/* frontend/src/css/analysis_modal.css */
+
+@reference "tailwindcss";
+
+/* (Опционально) Определение кастомной темы */
+@theme {
+  /* ... */
+}
+
+/* (Опционально) Базовые стили */
+@layer base {
+  /* ... */
+}
+
+/* (Опционально) Стили компонентов */
+@layer components {
+
+  /* --- Стили для ResultsModal (теперь AnalysisModal) --- */
+  .analysis-modal-overlay {
+    @apply fixed inset-0 bg-gray-500/50 flex items-center justify-center z-[1000] backdrop-blur-sm;
+  }
+
+  .analysis-modal-content {
+    @apply relative bg-white rounded-lg shadow-xl max-w-[95vw] max-h-[95vh] min-w-[60vw] min-h-[60vh] w-full h-full flex flex-col overflow-hidden;
+  }
+
+  .analysis-modal-close-btn {
+    @apply absolute top-2 right-2 bg-transparent border-none cursor-pointer p-1 rounded-full hover:bg-gray-100 z-[1001];
+  }
+
+  .analysis-modal-close-btn svg {
+    @apply w-5 h-5 text-gray-600; /* <-- ДОБАВЛЕНО */
+  }
+
+  /* --- НОВОЕ: Стили для заголовка --- */
+  .analysis-modal-header {
+    @apply p-4 border-b border-gray-200 bg-gray-50 text-center;
+  }
+
+  .analysis-modal-header h2 {
+    @apply text-xl font-semibold text-gray-800;
+  }
+  /* --- /НОВОЕ --- */
+
+  /* --- НОВОЕ: Стили для тела --- */
+  .analysis-modal-body {
+    @apply flex-grow p-4 overflow-auto relative; /* <-- Добавлен relative для позиционирования миниатюр */
+  }
+  /* --- /НОВОЕ --- */
+
+  .analysis-chart-container {
+    @apply w-full h-full min-h-[500px] max-h-[70vh] relative; /* <-- Добавлен relative, заданы размеры */
+  }
+
+  /* Стили для миниатюр (для отображения поверх SVG) */
+  .analysis-miniature {
+    @apply absolute w-25 h-25 bg-white border border-gray-300 rounded shadow-lg flex items-center justify-center;
+  }
+
+  .analysis-miniature img {
+    @apply w-full h-full object-cover rounded; /* <-- Стили для img внутри .analysis-miniature */
+  }
+
+  .analysis-miniature {
+    cursor: grab;
+    transition: opacity 0.2s, box-shadow 0.2s;
+  }
+
+  .analysis-miniature:hover {
+    opacity: 0.9;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .analysis-miniature-dragging {
+    cursor: grabbing !important;
+    opacity: 0.8;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+  }
+
+  .analysis-miniature-close {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ff4444;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1002;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+.analysis-miniature:hover .analysis-miniature-close {
+  opacity: 1;
+}
+
+.analysis-miniature-close:hover {
+  background: #cc0000;
+}
+
+  /* --- НОВОЕ: Стили для индикатора загрузки --- */
+  .analysis-modal-loading {
+    @apply p-4 text-center;
+  }
+  /* --- /НОВОЕ --- */
+
+  /* --- НОВОЕ: Стили для ошибки --- */
+  .analysis-modal-error {
+    @apply p-4 text-center text-red-500; /* <-- Объединим с body или используем отдельно */
+  }
+  /* --- /НОВОЕ --- */
+
+  /* --- НОВОЕ: Стили для футера --- */
+  .analysis-modal-footer {
+    @apply p-2 border-t border-gray-200 bg-gray-50 flex justify-end;
+  }
+
+  .analysis-modal-footer button {
+    @apply ml-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition;
+  }
+
+  .analysis-modal-footer button:disabled {
+    @apply bg-gray-300 text-gray-500 border border-gray-400 cursor-not-allowed opacity-60;
+  }
+
+  .analysis-modal-footer button:last-child {
+    @apply bg-red-500 hover:bg-red-600 text-white; /* Кнопка Close */
+  }
+  /* --- /НОВОЕ --- */
+
+  /* --- Стили для сноски (линии от точки к миниатюре) - Пока не реализовано в TSX --- */
+  /* .analysis-annotation-line { ... } */
+}
+
+/* (Опционально) Стили утилит */
+@layer utilities {
+  /* ... */
+}
+
+/* (Опционально) Глобальные правки - НЕТ, они в других файлах */
+/* body { ... } */
