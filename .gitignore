@@ -49,6 +49,8 @@ results/
 
 results_stage2/
 
+snoflakes/
+
 archieve/
 
 frontend/src/components/ImageUploader.tsx
