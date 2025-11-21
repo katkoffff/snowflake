@@ -66,7 +66,7 @@ export default function GalleryPanel() {
           <div key={folder.name}>
             {folder.preview_image ? (
               <img
-                src={`http://localhost:8000/results/image_in_dir?dir_name=${encodeURIComponent(folder.name)}&file_name=${folder.preview_image}`}
+                src={`http://localhost:8000/api/results/image_in_dir?dir_name=${encodeURIComponent(folder.name)}&file_name=${folder.preview_image}`}
                 alt={`Preview from ${folder.name}`}
                 onClick={() => openResultsModal(folder.name)}
               />

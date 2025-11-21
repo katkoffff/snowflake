@@ -68,6 +68,17 @@
   .nav-info {
     @apply text-sm text-gray-600;
   }
+  
+  .save-to-stage2-btn {
+    @apply bg-blue-500 hover:bg-blue-600 text-white font-medium text-xs px-3 py-1.5 rounded-md 
+           transition-all duration-200 ease-in-out shadow-sm
+           disabled:opacity-70 disabled:cursor-not-allowed
+           flex items-center gap-1;
+  }
+
+  .save-to-stage2-btn:hover {
+    @apply shadow-md;
+  }
 }
 
 /* (Опционально) Стили утилит */

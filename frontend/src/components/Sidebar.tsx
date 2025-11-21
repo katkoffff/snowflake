@@ -37,6 +37,7 @@ export default function Sidebar() {
     //isAnalysisModalOpen,
      setIsAnalysisModalOpen,    
     // --- /НОВОЕ ---
+     currentStage, setCurrentStage,
   } = useApp();
 
   const isInteractive = mode === 'interactive';
@@ -331,7 +332,7 @@ export default function Sidebar() {
       // Вызываем эндпоинт анализа
       const res = await api.post("/analyze_results", new FormData()); // formData пустая, т.к. endpoint принимает только session_id
       console.log("[DEBUG] Analyze results response:", res.data);
-
+      
       if (res.data.results_path) {        
         // Открываем модальное окно анализа
         setIsAnalysisModalOpen(true);
@@ -344,6 +345,10 @@ export default function Sidebar() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const goToStage2 = () => {
+    setCurrentStage("stage2"); // Переключаемся на stage2
   };
 
   // --- Перегенерация при изменении настроек (в режиме 'auto') ---
@@ -535,7 +540,13 @@ export default function Sidebar() {
             {/* Добавь другие настройки по аналогии */}
           </div>
         </>
+        
       )}
+      {/* --- НОВАЯ КНОПКА: Перейти к Этапу 2 --- */}
+      <button className="btn-secondary" onClick={goToStage2}>
+        Go to Stage 2
+      </button>
+      {/* --- /НОВАЯ КНОПКА --- */}
       {/* --- РЕНДЕРИМ AnalysisModal --- */}
       <AnalysisModal />
     </div>

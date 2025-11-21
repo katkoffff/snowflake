@@ -512,7 +512,7 @@ const handleSavePlot = async () => {
                 const result = results[idx];
                 if (!result) return null;
 
-                const imgSrc = `http://localhost:8000/results/image_in_dir?dir_name=${encodeURIComponent(result.session_folder)}&file_name=main.jpg`;
+                const imgSrc = `http://localhost:8000/api/results/image_in_dir?dir_name=${encodeURIComponent(result.session_folder)}&file_name=main.jpg`;
 
                 return (
                   <div
@@ -538,7 +538,10 @@ const handleSavePlot = async () => {
                     >
                     ×
                     </button>
-                    
+                    {/* 🔥 НАЗВАНИЕ МИНИАТЮРЫ (SESSION FOLDER) */}
+                    <div className="analysis-miniature-label">
+                      {result.session_folder}
+                    </div>
                     <img
                     src={imgSrc}
                     alt={`Preview from ${result.session_folder}`}

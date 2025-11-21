@@ -23,6 +23,7 @@ const ResultsModal: React.FC = () => {
   const [currentImageSrc, setCurrentImageSrc] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
 
   // Загружаем список папок при открытии модального окна
   useEffect(() => {
@@ -87,11 +88,28 @@ const ResultsModal: React.FC = () => {
     // при isResultsModalOpen=true и initialFolderNameForModal - загрузка
   }, [isResultsModalOpen, initialFolderNameForModal]);
 
+  const handleSaveToStage2 = async () => {
+    if (currentIndex === -1 || !folders[currentIndex]?.name) return;
+
+    const folderName = folders[currentIndex].name;
+    setSaveStatus("saving");
+
+    try {
+      await api.post("/results/save_to_stage2", { folder_name: folderName });
+      setSaveStatus("success");
+      setTimeout(() => setSaveStatus("idle"), 2000); // авто-сброс
+    } catch (err: any) {
+      console.error("Failed to save to stage2:", err);
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    }
+  };
+
   const loadFinalImage = async (folderName: string) => {
     try {
       // Используем эндпоинт, который возвращает файл из папки
       // Предполагаем, что /results/image_in_dir принимает dir_name и file_name
-      const imageUrl = `http://localhost:8000/results/image_in_dir?dir_name=${encodeURIComponent(folderName)}&file_name=final.jpg`;
+      const imageUrl = `http://localhost:8000/api/results/image_in_dir?dir_name=${encodeURIComponent(folderName)}&file_name=final.jpg`;
       setCurrentImageSrc(imageUrl);
     } catch (err) {
       console.error("Failed to load final image:", err);
@@ -158,15 +176,28 @@ const ResultsModal: React.FC = () => {
           </div>
         )}
 
-        {/* Навигация */}
-        {/* Заменяем className на короткое имя */}
+        {/* Навигация + КНОПКА СОХРАНЕНИЯ */}
         <div className="modal-navigation">
           <button className="nav-btn" onClick={goToPrev} disabled={currentIndex <= 0}>
             {'<'}
           </button>
+
+          <button
+            onClick={handleSaveToStage2}
+            disabled={saveStatus === "saving"}
+            className="save-to-stage2-btn"
+            title="Сохранить в Stage 2"
+          >
+            {saveStatus === "saving" && "⏳"}
+            {saveStatus === "success" && "✓"}
+            {saveStatus === "error" && "✗"}
+            {saveStatus === "idle" && "💾 Сохранить для 2-го этапа"}
+          </button>
+
           <span className="nav-info">
-            {currentIndex !== -1 ? `${currentIndex + 1} / ${folders.length}` : "No folders"}
+            {currentIndex !== -1 ? `${currentIndex + 1} / ${folders.length}` : "Нет папок"}
           </span>
+
           <button className="nav-btn" onClick={goToNext} disabled={currentIndex >= folders.length - 1}>
             {'>'}
           </button>

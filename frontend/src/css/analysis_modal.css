@@ -135,6 +135,26 @@
   .analysis-modal-footer button:last-child {
     @apply bg-red-500 hover:bg-red-600 text-white; /* Кнопка Close */
   }
+  .analysis-miniature-label {
+    position: absolute;
+    bottom: -22px;            /* немного ниже миниатюры */
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.75);
+    color: white;
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;     /* чтобы не мешало перетаскиванию */
+    transition: opacity 0.2s;
+    z-index: 1002;
+  }
+
+  .analysis-miniature:hover .analysis-miniature-label {
+    opacity: 1;
+  }
   /* --- /НОВОЕ --- */
 
   /* --- Стили для сноски (линии от точки к миниатюре) - Пока не реализовано в TSX --- */

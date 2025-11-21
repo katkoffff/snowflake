@@ -1,8 +1,8 @@
 name: snowflake
 channels:
   - defaults
-  - pytorch # Добавим канал PyTorch, чтобы гарантировать установку нужных версий
-  #- conda-forge # Иногда нужен для других зависимостей
+  - pytorch
+  # - conda-forge
 dependencies:
   - python=3.12
   - pip
@@ -10,62 +10,80 @@ dependencies:
       # Основные зависимости для FastAPI и веба
       - fastapi==0.115.0
       - uvicorn==0.30.0
-      - python-multipart==0.0.20 # Уточни версию, если нужна конкретная
-      
+      - python-multipart==0.0.20
+
       # Зависимости для обработки изображений
       - opencv-python==4.8.1.78
-      - pillow==12.0.0 # Уточни версию, если нужна конкретная
-      - numpy==1.26.4 # Уточни версию, если нужна конкретная
-      - scikit-image==0.25.2 # Добавим, так как используешь skimage
-      
-      # PyTorch и его сателлиты (указаны версии для CUDA 12.6)
-      # Убедись, что версии совместимы. В твоём pip list torch 2.6.0, torchvision 0.21.0
-      # Эти версии нужно указать при установке вручную, pip install не может их установить из списка
-      # Поэтому они НЕ указываются тут в pip:, а устанавливаются отдельно в инструкции.
-      # - torch==2.6.0+cu126 # <-- НЕТ в pip list, устанавливается отдельно
-      # - torchvision==0.21.0+cu126 # <-- НЕТ в pip list, устанавливается отдельно
-      # - torchaudio==2.6.0+cu126 # <-- НЕТ в pip list, устанавливается отдельно
-      
-      # Зависимости для SAM 2
-      # SAM-2 устанавливается через pip install -e . из репозитория
-      # Его нельзя указать просто как имя пакета в списке pip:, т.к. он не опубликован на PyPI
-      # Поэтому он НЕ указывается тут, а устанавливается отдельно в инструкции.
-      # - SAM-2==1.0 # <-- НЕТ, устанавливается отдельно
-      
-      # Прочие зависимости, которые могут быть нужны
-      - pydantic==2.12.3 # Уточни версию, если нужна конкретная
-      - annotated-types==0.7.0 # Может быть зависимостью pydantic
-      - anyio==4.11.0 # Может быть зависимостью fastapi
-      - click==8.3.0 # Может быть зависимостью uvicorn
-      - h11==0.16.0 # Может быть зависимостью uvicorn/starlette
-      - idna==3.11 # Может быть зависимостью любого сетевого пакета
-      - sniffio==1.3.1 # Может быть зависимостью anyio
-      - starlette==0.38.6 # Зависимость FastAPI
-      - typing_extensions==4.15.0 # Может быть зависимостью torch или других
-      - tqdm==4.67.1 # Может быть зависимостью SAM 2 или torch
-      - hydra-core==1.3.2 # Зависимость SAM 2
-      - iopath==0.1.10 # Зависимость SAM 2
-      - omegaconf==2.3.0 # Зависимость hydra-core
-      - antlr4-python3-runtime==4.9.3 # Зависимость hydra-core
-      - packaging==25.0 # Зависимость torch и других
-      - filelock==3.20.0 # Зависимость torch
-      - sympy==1.13.1 # Зависимость torch
-      - networkx==3.5 # Зависимость torch
-      - jinja2==3.1.6 # Зависимость torch
-      - markupsafe==3.0.3 # Зависимость jinja2
-      - portalocker==3.2.0 # Зависимость iopath
-      - pywin32==311 # Зависимость portalocker на Windows
-      - pyyaml==6.0.3 # Зависимость omegaconf
-      - lazy_loader==0.4 # Зависимость scikit-image
-      - imageio==2.37.0 # Зависимость scikit-image
-      - tifffile==2025.10.16 # Зависимость scikit-image
-      - mpmath==1.3.0 # Зависимость sympy
-      - scipy==1.16.3 # Зависимость scikit-image
-      # Зависимости от других зависимостей (не нужно указывать, pip сам разрулит, но для ясности)
-      # - typing-inspection==0.4.2 # Скорее всего не нужна напрямую
-      # - setuptools==80.9.0 # Обычно уже установлена
-      # - wheel==0.45.1 # Обычно уже установлена
-      # - intel-openmp==2021.4.0 # Зависимость от conda
-      # - mkl==2021.4.0 # Зависимость от conda
-      # - tbb==2021.13.1 # Зависимость от conda
-      # - fsspec==2025.10.0 # Зависимость от torch
+      - pillow==12.0.0
+      - numpy==1.26.4
+      - scikit-image==0.25.2
+
+      # PyTorch и его сателлиты (устанавливаются вручную!)
+      # - torch==2.6.0+cu126
+      # - torchvision==0.21.0+cu126
+      # - torchaudio==2.6.0+cu126
+
+      # SAM-2 устанавливается вручную!
+      # - SAM-2 @ git+https://github.com/facebookresearch/sam2.git@…
+
+      # Прочие зависимости
+      - annotated-types==0.7.0
+      - antlr4-python3-runtime==4.9.3
+      - anyio==4.11.0
+      - cairocffi==1.7.1
+      - cffi==2.0.0
+      - charset-normalizer==3.4.4
+      - click==8.3.0
+      - colorama==0.4.6
+      - contourpy==1.3.3
+      - cssselect2==0.8.0
+      - cycler==0.12.1
+      - defusedxml==0.7.1
+      - filelock==3.20.0
+      - fonttools==4.60.1
+      - freetype-py==2.5.1
+      - fsspec==2025.10.0
+      - h11==0.16.0
+      - hydra-core==1.3.2
+      - idna==3.11
+      - imageio==2.37.0
+      - intel-openmp==2021.4.0
+      - iopath==0.1.10
+      - Jinja2==3.1.6
+      - joblib==1.5.2
+      - kiwisolver==1.4.9
+      - lazy_loader==0.4
+      - lxml==6.0.2
+      - MarkupSafe==3.0.3
+      - matplotlib==3.10.7
+      - mkl==2021.4.0
+      - mpmath==1.3.0
+      - networkx==3.5
+      - omegaconf==2.3.0
+      - packaging==25.0
+      - portalocker==3.2.0
+      - pycairo==1.29.0
+      - pycparser==2.23
+      - pydantic==2.12.3
+      - pydantic_core==2.41.4
+      - pyparsing==3.2.5
+      - python-dateutil==2.9.0.post0
+      - pywin32==311
+      - PyYAML==6.0.3
+      - rlPyCairo==0.4.0
+      - scikit-learn==1.7.2
+      - scipy==1.16.3
+      - setuptools==80.9.0
+      - six==1.17.0
+      - sniffio==1.3.1
+      - starlette==0.38.6
+      - sympy==1.13.1
+      - tbb==2021.13.1
+      - threadpoolctl==3.6.0
+      - tifffile==2025.10.16
+      - tinycss2==1.4.0
+      - typing-inspection==0.4.2
+      - typing_extensions==4.15.0
+      - webencodings==0.5.1
+      - wheel==0.45.1
+      - tqdm==4.67.1

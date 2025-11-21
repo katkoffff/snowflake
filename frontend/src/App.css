@@ -1,42 +1,50 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* frontend\src\css\app.css */
+
+@reference "tailwindcss";
+
+/* (Опционально) Определение кастомной темы */
+@theme {
+  /* ... */
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* (Опционально) Базовые стили */
+@layer base {
+  /* ... */
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+/* (Опционально) Стили компонентов */
+@layer components {
+
+  /* --- Стили для App.tsx --- */
+  .app-container {
+    @apply grid grid-cols-[220px_1fr_320px] grid-rows-[auto_1fr_auto] h-screen bg-gray-50 text-gray-800;
   }
-  to {
-    transform: rotate(360deg);
+
+  .app-header {
+    @apply col-span-3 border-b border-gray-200 bg-white shadow-sm;
+  }
+
+  .app-sidebar {
+    @apply border-r border-gray-200 bg-white overflow-y-auto;
+  }
+
+  .app-main {
+    @apply bg-gray-100 overflow-hidden;
+  }
+
+  .app-gallery {
+    @apply border-l border-gray-200 bg-white overflow-y-auto;
+  }
+
+  .app-footer {
+    @apply col-span-3 border-t border-gray-200 bg-white text-sm text-gray-500 py-2 text-center;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+/* (Опционально) Стили утилит */
+@layer utilities {
+  /* ... */
 }
 
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
+/* (Опционально) Глобальные правки - ЛУЧШЕ в отдельном файле, например, globals.css или index.css */
+/* body { ... } */
