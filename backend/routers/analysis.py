@@ -8,7 +8,7 @@
 
 from fastapi import APIRouter, Form, HTTPException
 from services.analysis_service import (
-    analyze_all_sessions, read_analysis_results, save_chart, draw_contour_analysis, find_side_branches
+    analyze_all_sessions, read_analysis_results, save_chart, draw_contour_analysis, find_side_branches, get_envelops
 )
 from schemas.request import SaveChartRequest
 from core.config import RESULTS_DIR
@@ -19,8 +19,9 @@ from utils.debug import print_debug
 from services.session_service import get_session, update_session
 from services.image_service import image_to_base64_png
 import numpy as np
-from services.analysis_service import analyze_branches_with_skeleton, draw_branch_analysis
 from services.image_service import image_to_base64_png
+from scipy.signal import savgol_filter
+from scipy.interpolate import splprep, splev
 
 router = APIRouter()
 
@@ -94,6 +95,44 @@ async def find_centroid(session_id: str = Form(...), settings_json: str = Form(N
             break
     if main is None:
         raise HTTPException(status_code=404, detail="Main contour not found")
+    
+    # =======================
+    # APPLY CONTOUR SMOOTHING
+    # =======================
+
+    # Укажи метод: "savgol" или "spline" или None
+    contour_smooth_method = "" #"savgol", "spline"
+
+    if contour_smooth_method == "savgol":
+        # параметры можно вынести в настройки
+        window = 11  # должно быть нечетным
+        poly = 3
+
+        x = main[:, 0].astype(float)
+        y = main[:, 1].astype(float)
+
+        x_smooth = savgol_filter(x, window_length=window, polyorder=poly)
+        y_smooth = savgol_filter(y, window_length=window, polyorder=poly)
+
+        main = np.stack([x_smooth, y_smooth], axis=1).astype(np.int32)
+
+    elif contour_smooth_method == "spline":
+        s = 0  
+        x = main[:, 0].astype(float)
+        y = main[:, 1].astype(float)
+        
+        try:
+            tck, u = splprep([x, y], s=s)
+            
+            # РАВНОМЕРНАЯ перевыборка
+            # Выбираем количество точек (можно сделать равным исходному или больше)
+            num_points = len(x) * 1  # или len(x) * 2 для большей детализации
+            u_new = np.linspace(0, 1, num_points)
+            x_smooth, y_smooth = splev(u_new, tck)
+            
+            main = np.stack([x_smooth, y_smooth], axis=1).astype(np.int32)
+        except Exception as e:
+            print(f"Spline smoothing failed: {e}")
 
     # parse settings if provided
     settings = None
@@ -126,6 +165,7 @@ async def find_centroid(session_id: str = Form(...), settings_json: str = Form(N
         # "peak_detection_scipy"
         img_out, updated_sectors = find_side_branches(img_out, main, sectors, step_ratio=100, method="peak_detection_scipy")
         analysis["sectors"] = updated_sectors
+        analysis["main_contour"] = main
     except Exception as e:
         print_debug(f"Error during draw_contour_analysis: {e}")
         raise HTTPException(status_code=500, detail=f"Drawing error: {e}")
@@ -136,33 +176,34 @@ async def find_centroid(session_id: str = Form(...), settings_json: str = Form(N
     preview_b64 = image_to_base64_png(img_out)
     return {"preview_b64": preview_b64, "session_id": session_id}
 
-
-@router.post("/find_branches")
-async def find_branches(session_id: str = Form(...), settings_json: str = Form(None)):
+@router.post("/calculate_envelop")
+async def calculate_envelop(session_id: str = Form(...), settings_json: str = Form(None)):
+    """
+    Performs full contour analysis for the MAIN contour and returns preview_b64 and analysis dict.
+    Optional `settings_json` can be passed (stringified JSON with draw settings).
+    """
+    print_debug(f"[DEBUG] /calculate_envelop called, session_id={session_id}")
     session = get_session(session_id)
-    if not session or "stage2_all_contours_info" not in session:
-        raise HTTPException(400, "Invalid session")
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
 
+    if "stage2_last_analysis" not in session:
+        raise HTTPException(status_code=400, detail="This session has no analysis.")
+    
     image_np = session.get("image")
-    if image_np is None:
-        raise HTTPException(500, "No image")
+    analysis = session.get("stage2_last_analysis")
 
-    main = next((np.array(info["contour"], dtype=np.int32)
-                 for info in session["stage2_all_contours_info"] if info.get("type") == "main"), None)
-    if main is None:
-        raise HTTPException(404, "Main contour not found")
+    # draw with settings
+    try:
+        
+        img_out = get_envelops(image_np, analysis.get("main_contour"), analysis.get("sectors"))
+        
+    except Exception as e:
+        print_debug(f"Error during calculate envelop: {e}")
+        raise HTTPException(status_code=500, detail=f"Drawing error: {e}")
 
-    settings = json.loads(settings_json) if settings_json else {}
+    # save updated image and analysis in session
+    update_session(session_id, **{"image": img_out})
 
-    analysis = analyze_branches_with_skeleton(main, image_np.shape[:2])
-    img_out = draw_branch_analysis(image_np, main, analysis, settings)
-
-    update_session(session_id, **{
-        "image": img_out,
-        "stage2_branch_analysis": analysis
-    })
-
-    return {
-        "preview_b64": image_to_base64_png(img_out),
-        "session_id": session_id
-    }
+    preview_b64 = image_to_base64_png(img_out)
+    return {"preview_b64": preview_b64, "session_id": session_id}

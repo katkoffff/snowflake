@@ -3,6 +3,9 @@ export interface AnalysisResult {
   session_folder: string;
   normalized_perimeter: number;
   normalized_area: number;
+  main_enclosing_radius: number;
+  radius_on_lenght: number;
+  radius_on_area: number;
   main_image_path: string; // Относительный путь
 }
 

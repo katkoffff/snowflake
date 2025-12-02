@@ -1,0 +1,58 @@
+/* frontend/src/css/envelop_modal.css */
+
+@reference "tailwindcss";
+
+/* Стили компонентов */
+@layer components {
+  /* --- Стили для EnvelopModal --- */
+  .envelop-modal-overlay {
+    @apply fixed inset-0 bg-gray-500/50 flex items-center justify-center z-[1000] backdrop-blur-sm;
+  }
+
+  .envelop-modal-content {
+    @apply relative bg-white rounded-lg shadow-xl max-w-[95vw] max-h-[95vh] min-w-[60vw] min-h-[60vh] w-full h-full flex flex-col overflow-hidden;
+  }
+
+  .envelop-modal-close-btn {
+    @apply absolute top-2 right-2 bg-transparent border-none cursor-pointer p-1 rounded-full hover:bg-gray-100 z-[1001];
+  }
+
+  .envelop-modal-close-btn svg {
+    @apply w-5 h-5 text-gray-600;
+  }
+
+  /* Заголовок */
+  .envelop-modal-header {
+    @apply p-4 border-b border-gray-200 bg-gray-50 text-center;
+  }
+
+  .envelop-modal-header h2 {
+    @apply text-xl font-semibold text-gray-800;
+  }
+
+  /* Тело с изображением */
+  .envelop-modal-body {
+    @apply flex-grow p-0 overflow-auto relative flex items-center justify-center bg-gray-900;
+  }
+
+  .envelop-image {
+    @apply w-full h-full object-contain;
+  }
+
+  /* Индикатор загрузки */
+  .envelop-modal-loading {
+    @apply p-4 text-center text-gray-600;
+  }
+
+  /* Сообщение об ошибке */
+  .envelop-modal-error {
+    @apply p-4 text-center text-red-500;
+  }
+}
+
+/* Адаптивные стили для мобильных */
+@media (max-width: 768px) {
+  .envelop-modal-content {
+    @apply max-w-[100vw] max-h-[100vh] min-w-[100vw] min-h-[100vh] rounded-none;
+  }
+}

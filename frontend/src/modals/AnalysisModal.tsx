@@ -170,7 +170,7 @@ const handleSavePlot = async () => {
       x: result.normalized_perimeter,
       y: result.normalized_area,
       color: "blue"
-    }));
+    }));    
 
     // 2. Собираем данные осей    
     const xMin = d3.min(results, (d) => d.normalized_perimeter) || 0;

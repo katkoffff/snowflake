@@ -87,6 +87,11 @@ export type AppContextType = {
   isAnalysisModalOpen: boolean;
   setIsAnalysisModalOpen: (isOpen: boolean) => void;
 
+  isEnvelopModalOpen: boolean;
+  setEnvelopModalOpen: (open: boolean) => void;
+  envelopGraphData: string | null;
+  setEnvelopGraphData: (p: string | null) => void;
+
   // --- Управление этапами ---
   currentStage: Stage;
   setCurrentStage: (stage: Stage) => void;
@@ -158,6 +163,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [initialFolderNameForModal, setInitialFolderNameForModal] = useState<string | null>(null);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState<boolean>(false);
 
+  const [isEnvelopModalOpen, setEnvelopModalOpen] = useState(false);
+  const [envelopGraphData, setEnvelopGraphData] = useState<string | null>(null);
+
   // --- Управление этапами ---
   const [currentStage, setCurrentStage] = useState<Stage>("stage1");
 
@@ -210,6 +218,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isResultsModalOpen, setIsResultsModalOpen,
         initialFolderNameForModal, setInitialFolderNameForModal,
         isAnalysisModalOpen, setIsAnalysisModalOpen,
+
+        isEnvelopModalOpen, setEnvelopModalOpen,
+        envelopGraphData, setEnvelopGraphData,
 
         // --- Управление этапами ---
         currentStage, setCurrentStage,

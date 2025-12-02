@@ -2,7 +2,8 @@
 import React, { useRef, useEffect } from "react";
 import { api } from "../api/client";
 import { useApp } from "../hooks/useAppContext"; // Убедись, что путь правильный
-import "../css/sidebar.css"; // Используем тот же CSS, или создай sidebar2.css
+import "../css/sidebar2.css"; // Используем тот же CSS, или создай sidebar2.css
+import EnvelopModal from "../modals//EnvelopModal"; // Добавляем импорт
 
 export default function Sidebar2() {
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -10,7 +11,9 @@ export default function Sidebar2() {
           setPreview,
           setPoints,
           setLoading, setOverlay, 
-          setCurrentStage 
+          setCurrentStage,
+          setEnvelopModalOpen,
+          setEnvelopGraphData, 
         } = useApp(); // Получаем setCurrentStage из контекста
 
   const goToStage1 = () => {
@@ -50,27 +53,49 @@ export default function Sidebar2() {
       const form = new FormData();
       form.append("session_id", sessionId);
 
-      const res = await api.post("/find_centroid", form); // <-- НОВЫЙ эндпоинт
-      // Предполагаем, что эндпоинт возвращает обновлённое изображение с точкой
+      const res = await api.post("/find_centroid", form); 
       if (res.data.preview_b64) {
         setPreview(`data:image/png;base64,${res.data.preview_b64}`);
         setOverlay(null); // Сбрасываем overlay, если используется preview
       }
-      // Опционально: если эндпоинт возвращает координаты
-      // if (res.data.centroid) {
-      //   console.log("Centroid found at:", res.data.centroid);
-      //   // Можешь сохранить в AppContext, если нужно для других целей
-      // }
+      
     } catch (err) {
       console.error("Find centroid failed:", err);
       alert("Find centroid failed");
     } finally {
       setLoading(false);
     }
-  };    
+  };
+  
+  const handleCalculateAndShowGraphs = async () => {
+    if (!sessionId) return alert("No session for calculations.");
+    
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.append("session_id", sessionId);
+      
+      // Отправляем запрос на расчеты
+      const res = await api.post("/calculate_envelop", form);
+      
+      // Сохраняем данные графиков в контекст
+      if (res.data.preview_b64) {
+        setEnvelopGraphData(`data:image/png;base64,${res.data.preview_b64}`);
+        // Открываем модальное окно
+        setEnvelopModalOpen(true);
+      } else {
+        alert("No graph data received");
+      }
+    } catch (err) {
+      console.error("Calculate failed:", err);
+      alert("Calculate failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="sidebar flex flex-col gap-3 p-4">
+    <div className="sidebar2">
       <input key={`file-input-${sessionId || 'cleared'}`} type="file" ref={fileInput} className="hidden" webkitdirectory="" onChange={handleFileSelect}/>
       <button className="btn-primary" onClick={() => fileInput.current?.click()}>
         Upload
@@ -78,9 +103,18 @@ export default function Sidebar2() {
       <button className="btn-secondary" onClick={handleFindCentroid} disabled={!sessionId}>
         Find Centroid
       </button>
+      <button 
+        className="btn-calculate" 
+        onClick={handleCalculateAndShowGraphs} 
+        disabled={!sessionId}
+      >
+        Calculate & Show Graphs
+      </button>
       <button className="btn-secondary" onClick={goToStage1}>
         Back to Stage 1
-      </button>      
+      </button>  
+      {/* Добавляем модалку в рендер */}
+      <EnvelopModal />    
     </div>
   );
 }

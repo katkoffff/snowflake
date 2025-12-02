@@ -203,45 +203,7 @@ def analyze_main_contour(contour: np.ndarray) -> dict:
     print_debug("Main contour analysis finished.")
     return analysis
 
-def bresenham_line(p0: Tuple[int, int], p1: Tuple[int, int]) -> List[Tuple[int, int]]:
-    """Bresenham's line algorithm: возвращает все пиксели от p0 до p1"""
-    x0, y0 = p0
-    x1, y1 = p1
-    points = []
-    dx = abs(x1 - x0)
-    dy = abs(y1 - y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx - dy
 
-    while True:
-        points.append((x0, y0))
-        if x0 == x1 and y0 == y1:
-            break
-        e2 = 2 * err
-        if e2 > -dy:
-            err -= dy
-            x0 += sx
-        if e2 < dx:
-            err += dx
-            y0 += sy
-    return points
-
-def count_neighbors(skeleton: np.ndarray, x: int, y: int, radius: int = 1) -> int:
-    """Считает соседей в 8-связности"""
-    count = 0
-    h, w = skeleton.shape
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            if dx == 0 and dy == 0:
-                continue
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < w and 0 <= ny < h and skeleton[ny, nx] > 0:
-                count += 1
-    return count
-
-def point_to_tuple(p):
-    return (int(p[0]), int(p[1]))
 
 
 

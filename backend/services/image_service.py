@@ -10,9 +10,7 @@ from PIL import Image, ImageEnhance
 import cv2
 import numpy as np
 import base64
-from skimage.morphology import skeletonize
 from typing import List, Tuple
-from services.geometry import count_neighbors
 
 
 def preprocess_image_cv(image: np.ndarray, config: dict | None = None) -> np.ndarray:
@@ -106,59 +104,5 @@ def create_image_with_contours(main_image_rgb: np.ndarray, all_contours_info: li
         cv2.polylines(img_with_contours, [contour_pts], isClosed=True, color=color, thickness=thickness)
 
     return img_with_contours
-
-
-def contour_to_mask(contour: np.ndarray, img_shape: Tuple[int, int]) -> np.ndarray:
-    """Контур → бинарная маска"""
-    h, w = img_shape
-    mask = np.zeros((h, w), dtype=np.uint8)
-    cv2.fillPoly(mask, [contour], 255)
-    return mask
-
-def thin_skeleton(mask: np.ndarray) -> np.ndarray:
-    """Скелетонизация: предпочтительно cv2.ximgproc, fallback — skimage"""
-    try:
-        return cv2.ximgproc.thinning(mask)
-    except:
-        # fallback
-        return (skeletonize(mask > 0).astype(np.uint8) * 255)
-
-def prune_skeleton(skeleton: np.ndarray, min_length: int = 5) -> np.ndarray:
-    """Удаляет короткие "усики" — прунинг скелета"""
-    pruned = skeleton.copy()
-    h, w = skeleton.shape
-    visited = np.zeros_like(skeleton, dtype=bool)
-
-    def dfs_prune(x, y, length):
-        stack = [(x, y, length)]
-        path = []
-        while stack:
-            cx, cy, clen = stack[-1]
-            if visited[cy, cx]:
-                stack.pop()
-                continue
-            visited[cy, cx] = True
-            path.append((cx, cy))
-
-            neighbors = [(cx+dx, cy+dy) for dx in [-1,0,1] for dy in [-1,0,1]
-                        if not (dx == 0 and dy == 0)
-                        and 0 <= cx+dx < w and 0 <= cy+dy < h
-                        and pruned[cy+dy, cx+dx] > 0 and not visited[cy+dy, cx+dx]]
-
-            if not neighbors:
-                stack.pop()
-                if clen < min_length and len(path) > 1:
-                    for px, py in path:
-                        pruned[py, px] = 0
-                path = []
-            else:
-                nx, ny = neighbors[0]
-                stack.append((nx, ny, clen + 1))
-
-    for y in range(h):
-        for x in range(w):
-            if pruned[y, x] > 0 and not visited[y, x] and count_neighbors(pruned, x, y) == 1:
-                dfs_prune(x, y, 0)
-    return pruned
 
 
