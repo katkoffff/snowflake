@@ -89,13 +89,19 @@ def analyze_all_sessions() -> List[Dict[str, Any]]:
                 print_debug(f"[WARN] Radius 0 for {session_dir_path.name}")
                 normalized_perimeter = normalized_area = 0.0
 
+            log_perimetr = normalized_perimeter ** 2 #np.log(total_perimeter)
+            log_area = normalized_area #np.log(total_area)
+
+            fractal_dimension = round(log_area / (log_perimetr), 2)
+
             analysis_data.append({
                 "session_folder": session_dir_path.name,
                 "normalized_perimeter": normalized_perimeter,
                 "normalized_area": normalized_area,
                 "main_enclosing_radius": main_enclosing_radius,
-                "radius_on_lenght": radius_on_lenght,
-                "radius_on_area": radius_on_area,
+                "log_perimetr": log_perimetr,
+                "log_area": log_area,
+                "fractal_dimension": fractal_dimension,
                 "main_image_path": str(main_image_path.relative_to(RESULTS_DIR))
             })
 
@@ -137,7 +143,8 @@ def save_chart(
     points: List[Dict[str, Any]],
     axes: Dict[str, Any],
     miniatures: List[Dict[str, Any]],
-    viewport_size: dict
+    viewport_size: dict,
+    chart_type: str
 ) -> Path:
     """
     Сохраняет график с миниатюрами и линиями.
@@ -192,7 +199,7 @@ def save_chart(
         save_dir = GRAPH_DIR / "saved_charts"
         save_dir.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"analysis_chart_{timestamp}.jpg"
+        filename = f"{chart_type}_chart_{timestamp}.jpg"
         file_path = save_dir / filename
         plt.savefig(file_path, dpi=150, bbox_inches='tight')
         plt.close()
@@ -650,11 +657,11 @@ def get_envelops(image, contour, sectors_data):
         
         # Совместный фит
         #params = fit_combined_model(x_combined, z_combined)
-        params = fit_alpha_rho(x_combined, z_combined, cutoff_ratio=0.95)
+        params = fit_alpha_rho(x_combined, z_combined, cutoff_ratio=0.95, radius=updated_sector["radius"]*0.05)
 
         print_debug(f"Результат: α = {params['alpha']:.3f}, ρ = {params['rho']:.2f} пикселей")
         
-        gen_params = fit_gen_model(x_bp, z_bp, params['alpha'], params['rho'], initial_guess=[1.0, 1.5])
+        gen_params = fit_gen_model(x_bp, z_bp, params['alpha'], params['rho'], initial_guess=[1.0, 1.5], bounds=([0.1, 0.5], [10.0, 5.0]))
 
         print_debug(f"Результат: lambda = {gen_params['lambda']:.3f}, n = {gen_params['n']:.2f}")
 
@@ -699,7 +706,8 @@ def get_envelops(image, contour, sectors_data):
             params=all_params,
             left_branches_list=all_left_branches,
             right_branches_list=all_right_branches,
-            num_sectors=6
+            num_sectors=6,
+            isCircle=False
         )
         
         # Конвертируем в base64
@@ -806,7 +814,7 @@ def prepare_combined_fitting_data(contour, snowflake_center, dendrite_tip, left_
     x_fit_bp, z_fit_bp = zip(*fit_bp)
     return np.array(x_bp), np.array(z_bp), np.array(x_all), np.array(z_all), np.array(x_fit_bp), np.array(z_fit_bp), growth_axis_unit, perp_axis
 
-def fit_alpha_rho(x, z, cutoff_ratio=0.85):
+def fit_alpha_rho(x, z, cutoff_ratio=0.85, radius=None):
     """
     Фит α и ρ через curve_fit: сначала ρ по окружности, потом α по всей модели
     """
@@ -826,33 +834,36 @@ def fit_alpha_rho(x, z, cutoff_ratio=0.85):
     # 2. Фит ρ по окружности
     x_tip, z_tip = get_tip_points(x, z, cutoff_ratio)
     print_debug(f"x_tip: {x_tip}, z_tip: {z_tip}")
-    
-    if len(x_tip) < 2:
-        return None
-    
-    def circle_model(x, rho):
-        return -rho + np.sqrt(rho**2 - x**2 + 1e-10)
-    
-    z_abs = np.abs(z_tip)
-    lower_bound = np.max(np.abs(x_tip)) * 1.001
-    rho_guess = np.median((x_tip**2 + z_tip**2) / (2 * z_abs + 1e-10))
-    if rho_guess < lower_bound:
-        rho_guess = lower_bound
-    
-    print_debug(f"rho_guess: {rho_guess}, lower_bound: {lower_bound}")
-    try:
-        rho_opt, _ = curve_fit(
-            circle_model,
-            x_tip,
-            z_tip,
-            p0=[rho_guess],
-            bounds=([lower_bound], [1000.0])
-        )
-        rho = rho_opt[0]
-    except Exception as e:
-        print_debug(f"error: {e}")
-        rho = None
+    if radius is None:
+        if len(x_tip) < 2:
+            return None
+        
+        def circle_model(x, rho):
+            return -rho + np.sqrt(rho**2 - x**2 + 1e-10)
+        
+        z_abs = np.abs(z_tip)
+        lower_bound = np.max(np.abs(x_tip)) * 1.001
+        rho_guess = np.median((x_tip**2 + z_tip**2) / (2 * z_abs + 1e-10))
+        if rho_guess < lower_bound:
+            rho_guess = lower_bound
+        
+        print_debug(f"rho_guess: {rho_guess}, lower_bound: {lower_bound}")
+        try:
+            rho_opt, _ = curve_fit(
+                circle_model,
+                x_tip,
+                z_tip,
+                p0=[rho_guess],
+                bounds=([lower_bound], [1000.0])
+            )
+            rho = rho_opt[0]
+        except Exception as e:
+            print_debug(f"error: {e}")
+            rho = None
+    else:
+        rho = radius        
     print_debug(f"rho: {rho}")
+
     # 3. Фит α через curve_fit на всей модели с фиксированным ρ
     def full_model(x, alpha):
         x_norm = 2 * x / rho
@@ -967,7 +978,7 @@ def fit_combined_model(x, z, max_iterations=3):
     
     return best_params
 
-def fit_gen_model(x_data, z_data, alpha, rho, initial_guess=[1.0, 1.5]):
+def fit_gen_model(x_data, z_data, alpha, rho, initial_guess=[1.0, 1.5], bounds=([0.1, 0.5], [10.0, 5.0])):
     """
     Фиттинг обобщенной модели с параметрами lambda и n
     """
@@ -984,7 +995,7 @@ def fit_gen_model(x_data, z_data, alpha, rho, initial_guess=[1.0, 1.5]):
                             model_gen,  # передаём функцию напрямую
                             x_norm, z_norm,
                             p0=initial_guess,
-                            bounds=([0.1, 0.5], [10.0, 5.0])
+                            bounds=bounds
                         )
         
         lambda_opt, n_opt = params_opt
@@ -2081,7 +2092,8 @@ def create_envelops_summary_plot(
     params: List[Dict],
     left_branches_list: List[List[Dict]],
     right_branches_list: List[List[Dict]],
-    num_sectors: int = 6
+    num_sectors: int = 6,
+    isCircle=False
 ) -> plt.Figure:
     """
     Создает сводный график для конвертов.
@@ -2114,7 +2126,8 @@ def create_envelops_summary_plot(
                 params=params[i],
                 sector_idx=i+1,
                 left_branches=left_branches_list[i] if i < len(left_branches_list) else None,
-                right_branches=right_branches_list[i] if i < len(right_branches_list) else None
+                right_branches=right_branches_list[i] if i < len(right_branches_list) else None,
+                isCircle=isCircle
             )
         else:
             draw_empty_plot(ax=ax, sector_idx=i+1)
@@ -2135,7 +2148,8 @@ def draw_single_envelop_plot(
     params: Dict,
     sector_idx: int,
     left_branches: Optional[List[Dict]] = None,
-    right_branches: Optional[List[Dict]] = None
+    right_branches: Optional[List[Dict]] = None,
+    isCircle=False
 ) -> None:
     """
     Рисует один график конверта.
@@ -2192,20 +2206,20 @@ def draw_single_envelop_plot(
             label='GEN fit' if sector_idx == 1 else None,
             zorder=4
         )
-    
-    # Рисуем единичную окружность (ρ=1) - центр смещен вниз на 1
-    circle_center = (0, -1)
-    circle = Circle(
-        circle_center, 1,
-        fill=False, 
-        linestyle='-',
-        linewidth=1.0,
-        edgecolor='black',
-        alpha=0.8,
-        label='ρ=1' if sector_idx == 1 else None,
-        zorder=2
-    )
-    ax.add_patch(circle)
+    if isCircle:
+        # Рисуем единичную окружность (ρ=1) - центр смещен вниз на 1
+        circle_center = (0, -1)
+        circle = Circle(
+            circle_center, 1,
+            fill=False, 
+            linestyle='-',
+            linewidth=1.0,
+            edgecolor='black',
+            alpha=0.8,
+            label='ρ=1' if sector_idx == 1 else None,
+            zorder=2
+        )
+        ax.add_patch(circle)
     
     # Рисуем веточки
     all_branches = []

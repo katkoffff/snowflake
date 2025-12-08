@@ -5,6 +5,7 @@ import { useApp } from "../hooks/useAppContext"; // Убедись, что пу�
 // --- ИМПОРТ ТИПА ---
 import type { AutoGenConfig } from "../types/autogen";
 import AnalysisModal from "../modals/AnalysisModal";
+import FractalDimensionModal from "../modals/FractalDimensionModal";
 import "../css/sidebar.css";
 
 export default function Sidebar() {
@@ -35,7 +36,8 @@ export default function Sidebar() {
     isUpdatingSettings, setIsUpdatingSettings,
     // --- НОВОЕ: Переменные для AnalysisModal ---
     //isAnalysisModalOpen,
-     setIsAnalysisModalOpen,    
+     setIsAnalysisModalOpen,
+     setIsFractalDimensionModalOPen,    
     // --- /НОВОЕ ---
      currentStage, setCurrentStage,
   } = useApp();
@@ -347,6 +349,33 @@ export default function Sidebar() {
     }
   };
 
+  // --- Handle Dimension Results ---
+  const handleDimensionResults = async () => {
+    //if (!sessionId) {
+    //  alert("No session to analyze. Upload an image first.");
+    //  return;
+    //}
+
+    setLoading(true);
+    try {
+      // Вызываем эндпоинт анализа
+      const res = await api.post("/analyze_results", new FormData()); // formData пустая, т.к. endpoint принимает только session_id
+      console.log("[DEBUG] Analyze results response:", res.data);
+      
+      if (res.data.results_path) {        
+        // Открываем модальное окно анализа
+        setIsFractalDimensionModalOPen(true);
+      } else {
+        alert("Analyze failed: No results path returned.");
+      }
+    } catch (err) {
+      console.error("Analyze failed:", err);
+      alert("Analyze failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const goToStage2 = () => {
     setCurrentStage("stage2"); // Переключаемся на stage2
   };
@@ -442,6 +471,14 @@ export default function Sidebar() {
         //disabled={!sessionId} // Отключена, если нет сессии
       >
         Analyze Results
+      </button>
+
+      <button
+        className="btn-secondary"
+        onClick={handleDimensionResults}
+        //disabled={!sessionId} // Отключена, если нет сессии
+      >
+        Dimension Results
       </button>
 
       {/* Условный рендеринг блока настроек */}
@@ -549,6 +586,7 @@ export default function Sidebar() {
       {/* --- /НОВАЯ КНОПКА --- */}
       {/* --- РЕНДЕРИМ AnalysisModal --- */}
       <AnalysisModal />
+      <FractalDimensionModal />
     </div>
   );
 }

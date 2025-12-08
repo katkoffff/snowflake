@@ -152,7 +152,27 @@
     z-index: 1002;
   }
 
+  .analysis-miniature-data {
+    position: absolute;
+    bottom: -44px;            /* немного ниже миниатюры */
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.75);
+    color: white;
+    padding: 2px 6px;
+    font-size: 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;     /* чтобы не мешало перетаскиванию */
+    transition: opacity 0.2s;
+    z-index: 1002;
+  }
+
   .analysis-miniature:hover .analysis-miniature-label {
+    opacity: 1;
+  }
+  .analysis-miniature:hover .analysis-miniature-data {
     opacity: 1;
   }
   /* --- /НОВОЕ --- */

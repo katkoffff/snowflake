@@ -19,7 +19,7 @@ interface MiniatureInfo {
 }
 
 const AnalysisModal: React.FC = () => {
-  const { isAnalysisModalOpen, setIsAnalysisModalOpen } = useApp();
+  const { isFractalDimensionModalOPen, setIsFractalDimensionModalOPen } = useApp();
 
   const [results, setResults] = useState<AnalysisResult[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -41,7 +41,7 @@ const AnalysisModal: React.FC = () => {
 
   // --- Загрузка результатов ---
   useEffect(() => {
-    if (isAnalysisModalOpen) {
+    if (isFractalDimensionModalOPen) {
       const fetchResults = async () => {
         setLoading(true);
         setError(null);
@@ -61,12 +61,12 @@ const AnalysisModal: React.FC = () => {
       };
 
       fetchResults();
-    } else if (!isAnalysisModalOpen) {
+    } else if (!isFractalDimensionModalOPen) {
       setResults([]);
       setError(null);
       setMiniatures({});
     }
-  }, [isAnalysisModalOpen]);
+  }, [isFractalDimensionModalOPen]);
 
   // --- НОВОЕ: Обработчики перетаскивания ---
   const handleMiniatureMouseDown = (idx: number, e: React.MouseEvent) => {
@@ -167,22 +167,22 @@ const handleSavePlot = async () => {
   try {
     // 1. Собираем точки из результатов
     const pointsData: PointData[] = results.map(result => ({
-      x: result.normalized_perimeter,
-      y: result.normalized_area,
+      x: result.log_perimetr,
+      y: result.log_area,
       color: "blue"
     }));    
 
     // 2. Собираем данные осей    
-    const xMin = d3.min(results, (d) => d.normalized_perimeter) || 0;
-    const xMax = d3.max(results, (d) => d.normalized_perimeter) || 1;
-    const yMin = d3.min(results, (d) => d.normalized_area) || 0;
-    const yMax = d3.max(results, (d) => d.normalized_area) || 1;
+    const xMin = d3.min(results, (d) => d.log_perimetr) || 0;
+    const xMax = d3.max(results, (d) => d.log_perimetr) || 1;
+    const yMin = d3.min(results, (d) => d.log_area) || 0;
+    const yMax = d3.max(results, (d) => d.log_area) || 1;
 
     const xRange = xMax - xMin;
     const yRange = yMax - yMin;
     const axesData: AxesData = {
-      x_label: "Normalized Perimeter (L/Lc)",
-      y_label: "Normalized Area (S/Sc)", 
+      x_label: "Ln(Perimeter)",
+      y_label: "Ln(Area)", 
       x_range: [xMin - xRange * 0.05, xMax + xRange * 0.05] as [number, number],
       y_range: [yMin - yRange * 0, yMax + yRange * 0.25] as [number, number]
     };
@@ -240,8 +240,8 @@ const handleSavePlot = async () => {
           display_y: info.y, 
           display_width: 64,
           display_height: 64,
-          dot_x: result.normalized_perimeter,  // координаты точки
-          dot_y: result.normalized_area,       // координаты точки
+          dot_x: result.log_perimetr,  // координаты точки
+          dot_y: result.log_area,       // координаты точки
           svg_x: dataX,  // РЕАЛЬНЫЕ координаты миниатюры в системе данных!
           svg_y: dataY   // РЕАЛЬНЫЕ координаты миниатюры в системе данных!
         };
@@ -256,7 +256,7 @@ const handleSavePlot = async () => {
         width: window.innerWidth,
         height: window.innerHeight
       },
-      chart_type: 'analysis'
+      chart_type: 'dimension'
     };
 
     const response = await api.post('/analysis_save_chart', formData);
@@ -274,7 +274,7 @@ const handleSavePlot = async () => {
 };
   // --- Отрисовка графика ---
   useEffect(() => {
-    if (!isAnalysisModalOpen || !chartRef.current || results.length === 0) return;
+    if (!isFractalDimensionModalOPen || !chartRef.current || results.length === 0) return;
 
     const container = chartRef.current;
     d3.select(container).selectAll("svg").remove();
@@ -301,10 +301,10 @@ const handleSavePlot = async () => {
 
     // --- Определение шкал ---
     // --- Определение шкал ---
-    const xMin = d3.min(results, (d) => d.normalized_perimeter) || 0;
-    const xMax = d3.max(results, (d) => d.normalized_perimeter) || 1;
-    const yMin = d3.min(results, (d) => d.normalized_area) || 0;
-    const yMax = d3.max(results, (d) => d.normalized_area) || 1;
+    const xMin = d3.min(results, (d) => d.log_perimetr) || 0;
+    const xMax = d3.max(results, (d) => d.log_perimetr) || 1;
+    const yMin = d3.min(results, (d) => d.log_area) || 0;
+    const yMax = d3.max(results, (d) => d.log_area) || 1;
 
     // --- ФИКС РАСПРЕДЕЛЕНИЯ ОСЕЙ ---
     // Добавляем небольшой отступ к доменам для лучшего визуального восприятия
@@ -338,7 +338,7 @@ const handleSavePlot = async () => {
       .attr("y", 30)
       .attr("fill", "currentColor")
       .attr("text-anchor", "middle")
-      .text("Normalized Perimeter (L/Lc)");
+      .text("Ln(Perimeter)");
 
     g.append("g")
       .call(yAxis)
@@ -348,7 +348,7 @@ const handleSavePlot = async () => {
       .attr("x", -height / 2)
       .attr("fill", "currentColor")
       .attr("text-anchor", "middle")
-      .text("Normalized Area (S/Sc)");
+      .text("Ln(Area)");
 
     // --- Рисование точек ---
     const dots = g.selectAll(".dot")
@@ -356,8 +356,8 @@ const handleSavePlot = async () => {
       .enter()
       .append("circle")
       .attr("class", "dot")
-      .attr("cx", (d) => xScale(d.normalized_perimeter))
-      .attr("cy", (d) => yScale(d.normalized_area))
+      .attr("cx", (d) => xScale(d.log_perimetr))
+      .attr("cy", (d) => yScale(d.log_area))
       .attr("r", 5)
       .attr("fill", "blue")
       .attr("stroke", "white")
@@ -374,8 +374,8 @@ const handleSavePlot = async () => {
             const currentInfo = prev[index];
             const newIsVisible = !currentInfo?.isVisible;
 
-            const dotX = xScale(d.normalized_perimeter);
-            const dotY = yScale(d.normalized_area);
+            const dotX = xScale(d.log_perimetr);
+            const dotY = yScale(d.log_area);
 
             const containerRect = container.getBoundingClientRect();
             const offsetX = 10;
@@ -427,11 +427,11 @@ const handleSavePlot = async () => {
       gRef.current = null;
     };
 
-  }, [results, isAnalysisModalOpen]);
+  }, [results, isFractalDimensionModalOPen]);
 
   // --- Отрисовка сносок ---
   useEffect(() => {
-    if (!isAnalysisModalOpen || !svgRef.current || !gRef.current || !results) return;
+    if (!isFractalDimensionModalOPen || !svgRef.current || !gRef.current || !results) return;
 
     const svg = d3.select(svgRef.current);
     const g = d3.select(gRef.current);
@@ -480,16 +480,16 @@ const handleSavePlot = async () => {
       }
     });
 
-  }, [miniatures, isAnalysisModalOpen, results]);
+  }, [miniatures, isFractalDimensionModalOPen, results]);
 
   // --- Убираем старый обработчик клика ---
   // handleMiniatureClick больше не нужен
 
   const closeModal = () => {
-    setIsAnalysisModalOpen(false);
+    setIsFractalDimensionModalOPen(false);
   };
 
-  if (!isAnalysisModalOpen) {
+  if (!isFractalDimensionModalOPen) {
     return null;
   }
 
@@ -497,7 +497,7 @@ const handleSavePlot = async () => {
     <div className="analysis-modal-overlay" onClick={closeModal}>
       <div className="analysis-modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="analysis-modal-header">
-          <h2>Analysis Results</h2>
+          <h2>Fractal Dimension</h2>
         </div>
 
         <div className="analysis-modal-body">
@@ -542,6 +542,10 @@ const handleSavePlot = async () => {
                     {/* 🔥 НАЗВАНИЕ МИНИАТЮРЫ (SESSION FOLDER) */}
                     <div className="analysis-miniature-label">
                       {result.session_folder}
+                    </div>
+                    {/* 🔥 Фрактальная размерность (fractal_dimension) */}
+                    <div className="analysis-miniature-data">
+                      {`Dimension: ${result.fractal_dimension}`}
                     </div>
                     <img
                     src={imgSrc}

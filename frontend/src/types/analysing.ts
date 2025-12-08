@@ -4,8 +4,9 @@ export interface AnalysisResult {
   normalized_perimeter: number;
   normalized_area: number;
   main_enclosing_radius: number;
-  radius_on_lenght: number;
-  radius_on_area: number;
+  log_perimetr: number;
+  log_area: number;
+  fractal_dimension: number;
   main_image_path: string; // Относительный путь
 }
 
@@ -43,5 +44,6 @@ export interface SaveChartRequest {
     width: number;
     height: number;
   };
+  chart_type: string;
 }
 

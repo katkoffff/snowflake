@@ -86,6 +86,8 @@ export type AppContextType = {
   setInitialFolderNameForModal: (folderName: string | null) => void;
   isAnalysisModalOpen: boolean;
   setIsAnalysisModalOpen: (isOpen: boolean) => void;
+  isFractalDimensionModalOPen: boolean;
+  setIsFractalDimensionModalOPen: (isOpen: boolean) => void;
 
   isEnvelopModalOpen: boolean;
   setEnvelopModalOpen: (open: boolean) => void;
@@ -162,6 +164,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isResultsModalOpen, setIsResultsModalOpen] = useState<boolean>(false);
   const [initialFolderNameForModal, setInitialFolderNameForModal] = useState<string | null>(null);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState<boolean>(false);
+  const [isFractalDimensionModalOPen, setIsFractalDimensionModalOPen] = useState<boolean>(false);
 
   const [isEnvelopModalOpen, setEnvelopModalOpen] = useState(false);
   const [envelopGraphData, setEnvelopGraphData] = useState<string | null>(null);
@@ -218,6 +221,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isResultsModalOpen, setIsResultsModalOpen,
         initialFolderNameForModal, setInitialFolderNameForModal,
         isAnalysisModalOpen, setIsAnalysisModalOpen,
+        isFractalDimensionModalOPen, setIsFractalDimensionModalOPen,
 
         isEnvelopModalOpen, setEnvelopModalOpen,
         envelopGraphData, setEnvelopGraphData,

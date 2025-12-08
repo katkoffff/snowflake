@@ -62,7 +62,8 @@ async def analysis_save_chart(request: SaveChartRequest):
             points=[p.model_dump() for p in request.points],
             axes=request.axes.model_dump(),
             miniatures=[m.model_dump() for m in request.miniatures],
-            viewport_size=request.viewport_size
+            viewport_size=request.viewport_size,
+            chart_type=request.chart_type
         )
         return {"status": "success"}
     except Exception as e:
@@ -101,7 +102,7 @@ async def find_centroid(session_id: str = Form(...), settings_json: str = Form(N
     # =======================
 
     # Укажи метод: "savgol" или "spline" или None
-    contour_smooth_method = "" #"savgol", "spline"
+    contour_smooth_method = "densed" #"savgol", "spline"
 
     if contour_smooth_method == "savgol":
         # параметры можно вынести в настройки
@@ -134,6 +135,31 @@ async def find_centroid(session_id: str = Form(...), settings_json: str = Form(N
         except Exception as e:
             print(f"Spline smoothing failed: {e}")
 
+    elif contour_smooth_method == 'densed':
+        main = np.squeeze(main)  # если формат (N,1,2), превратит в (N,2)
+
+        max_step = 1.0   # максимальное расстояние между точками
+        dense = []
+
+        N = len(main)
+
+        for i in range(N):
+            p0 = main[i].astype(float)
+            p1 = main[(i + 1) % N].astype(float)  # замыкание
+
+            # расстояние между точками
+            dist = np.linalg.norm(p1 - p0)
+
+            # сколько интервалов надо сделать
+            steps = max(1, int(dist / max_step))
+
+            # равномерная интерполяция точек от p0 до p1
+            for t in np.linspace(0, 1, steps, endpoint=False):
+                dense.append(p0 * (1 - t) + p1 * t)
+
+        # переводим в numpy
+        main = np.array(dense, dtype=np.int32)
+        print_debug(f"init N: {N}; final N: {len(dense)}")
     # parse settings if provided
     settings = None
     if settings_json:

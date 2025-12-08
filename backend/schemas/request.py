@@ -38,6 +38,7 @@ class SaveChartRequest(BaseModel):
     axes: AxesData
     miniatures: List[MiniatureData]
     viewport_size: dict  # {width: int, height: int}
+    chart_type: str
 
 
 class SaveToStage2Request(BaseModel):
